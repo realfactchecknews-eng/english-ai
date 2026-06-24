@@ -17,6 +17,7 @@
     <a href="#/" data-route>Главная</a>
     <a href="#/test" data-route>Тест уровня</a>
     <a href="#/dashboard" data-route>Прогресс</a>
+    <a href="#/chat" data-route>Чат с ИИ</a>
     <a href="#/practice" data-route>Прокачка</a>
     <a href="#/write" data-route>Письмо</a>
     <a href="#/words" data-route>Слова дня</a>
@@ -36,6 +37,16 @@
       <button id="keySave" class="btn">Сохранить</button>
       <button id="keyDefault" class="btn ghost">Сбросить</button>
     </div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
+    <h3>Синхронизация между устройствами</h3>
+    <p class="muted">Придумай секретный код (одинаковый на телефоне и компе) — прогресс будет общим. Минимум 4 символа.</p>
+    <input id="syncInput" type="text" placeholder="напр. matvey-2026">
+    <div class="row">
+      <button id="syncOn" class="btn sm">Включить и загрузить</button>
+      <button id="syncPush" class="btn ghost sm">Выгрузить сейчас</button>
+      <button id="syncOff" class="btn ghost sm">Выключить</button>
+    </div>
+    <p class="muted" id="syncState" style="margin-top:10px;font-size:13px"></p>
   </div>
 </div>
 

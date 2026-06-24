@@ -16,20 +16,45 @@ const AI = (() => {
   // Строгий учитель-персона — приклеивается ко всем заданиям ИИ
   const PERSONA = () => `You are "Mr. Fluent", a strict and demanding English teacher. Your student is a native Russian speaker at CEFR level ${level()}, working hard to reach a confident B2/C1. Rules you ALWAYS follow: be rigorous and never let an error slide; explicitly point out EVERY mistake and name the grammar rule it breaks; explain briefly in Russian but keep English examples in English; be honest, no inflated praise; push the student slightly above their current level. `;
 
+  // базовый URL воркера (без /chat) — для /save, /load
+  const base = () => endpoint().replace(/\/chat\/?$/, '');
+
+  async function post(body) {
+    const res = await fetch(endpoint(), {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error('API ' + res.status + ': ' + t.slice(0, 160)); }
+    return res.json();
+  }
+
   async function chat(system, user, {json = true, temp = 0.4} = {}) {
     if (!hasRealKey()) throw new Error('NO_PROXY');
-    const res = await fetch(endpoint(), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({system, user, json, temp})
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error('API ' + res.status + ': ' + t.slice(0, 160));
-    }
-    const data = await res.json();
+    const data = await post({system, user, json, temp});
     const txt = data.choices ? data.choices[0].message.content : data.content;
     return json ? JSON.parse(txt) : txt;
+  }
+
+  // многоходовой чат: messages=[{role,content},...]
+  async function chatTurns(messages, {temp = 0.6} = {}) {
+    if (!hasRealKey()) throw new Error('NO_PROXY');
+    const data = await post({messages, json: false, temp});
+    return data.choices ? data.choices[0].message.content : data.content;
+  }
+
+  // ---- Синхронизация прогресса между устройствами ----
+  async function syncSave(code, data) {
+    const res = await fetch(base() + '/save', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code, data})
+    });
+    if (!res.ok) throw new Error('save ' + res.status);
+    return res.json();
+  }
+  async function syncLoad(code) {
+    const res = await fetch(base() + '/load?code=' + encodeURIComponent(code));
+    if (!res.ok) throw new Error('load ' + res.status);
+    return (await res.json()).data;
   }
 
   // ----- Генерация одного адаптивного вопроса -----
@@ -79,5 +104,7 @@ const AI = (() => {
     return acc.includes(norm(userAns));
   }
 
-  return {chat, nextQuestion, assess, theory, exercises, writingCheck, dailyWords, checkFill, hasRealKey, level};
+  const PERSONA_CHAT = () => PERSONA() + 'You are now in free chat mode. Answer the student\'s questions, explain grammar/vocabulary topics clearly (in Russian, English examples in English), and when asked — give exercises and check answers strictly. Keep replies focused and not too long. Use simple Markdown.';
+
+  return {chat, chatTurns, PERSONA_CHAT, syncSave, syncLoad, nextQuestion, assess, theory, exercises, writingCheck, dailyWords, checkFill, hasRealKey, level, base};
 })();

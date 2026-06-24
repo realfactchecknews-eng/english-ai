@@ -3,10 +3,28 @@ const app = document.getElementById('app');
 const SKILLS = ["Tenses","Prepositions","Use of English","Grammar","Vocabulary","Reading"];
 const TEST_LEN = 10;
 
+const SYNC_KEYS=['profile','attempts','writing','learnedWords','wordsCache','chatLog'];
 const store = {
   get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},
-  set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)),
+  set:(k,v)=>{localStorage.setItem(k,JSON.stringify(v));if(SYNC_KEYS.includes(k))schedulePush();},
 };
+/* ---- Sync ---- */
+let pushTimer=null;
+function schedulePush(){
+  if(!localStorage.getItem('syncCode'))return;
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(pushState,1500);
+}
+function gatherState(){const o={};SYNC_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!=null)o[k]=v;});return o;}
+async function pushState(){
+  const code=localStorage.getItem('syncCode');if(!code||!AI.hasRealKey())return;
+  try{await AI.syncSave(code,gatherState());}catch(e){/* тихо */}
+}
+async function pullState(code){
+  const data=await AI.syncLoad(code);
+  if(data){Object.entries(data).forEach(([k,v])=>localStorage.setItem(k,v));return true;}
+  return false;
+}
 const toast = m => {
   const t=document.createElement('div');t.className='toast';t.textContent=m;
   document.body.appendChild(t);setTimeout(()=>t.remove(),2600);
@@ -36,6 +54,7 @@ function router(){
   if(path==='/lesson') return Lesson(params.get('t'));
   if(path==='/write') return Writing();
   if(path==='/words') return Words();
+  if(path==='/chat') return Chat();
   Home();
 }
 window.addEventListener('hashchange',router);
@@ -349,6 +368,66 @@ function renderWords(words,today){
   document.getElementById('wReroll').onclick=()=>{store.set('wordsCache',{});Words();};
 }
 
+/* ---------- Chat с Mr. Fluent (с памятью) ---------- */
+function md(t){
+  return esc(t)
+    .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^\s*[-*]\s+(.*)$/gm,'• $1')
+    .replace(/\n/g,'<br>');
+}
+const CHAT_MAX=24; // сколько последних реплик помним
+function Chat(){
+  const log=store.get('chatLog',[]);
+  const bubbles=log.map(m=>chatBubble(m)).join('') ||
+    `<div class="muted" style="text-align:center;padding:30px">Спроси что угодно про английский: «объясни Present Perfect», «дай 5 упражнений на артикли», «проверь предложение …», «в чём разница between/among».</div>`;
+  app.innerHTML=`
+  <div class="card fade" style="display:flex;flex-direction:column;height:calc(100vh - 170px);min-height:420px">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="font-size:20px">Чат с Mr. Fluent</h2>
+      <button class="btn ghost sm" id="chatClear">Очистить</button>
+    </div>
+    <div id="chatBox" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px">${bubbles}</div>
+    <div class="fillrow" style="margin-top:14px">
+      <input id="chatIn" placeholder="Напиши сообщение…" autocomplete="off">
+      <button class="btn" id="chatSend">→</button>
+    </div>
+  </div>`;
+  const box=document.getElementById('chatBox');box.scrollTop=box.scrollHeight;
+  const input=document.getElementById('chatIn');
+  document.getElementById('chatClear').onclick=()=>{store.set('chatLog',[]);Chat();};
+  const send=async()=>{
+    const text=input.value.trim();if(!text)return;
+    if(!AI.hasRealKey()){toast('Чат работает с подключённым ИИ');return;}
+    const log=store.get('chatLog',[]);
+    log.push({role:'user',content:text});store.set('chatLog',log);
+    input.value='';
+    box.insertAdjacentHTML('beforeend',chatBubble({role:'user',content:text}));
+    const tid='t'+Date.now();
+    box.insertAdjacentHTML('beforeend',`<div id="${tid}" class="opt" style="align-self:flex-start;max-width:80%;cursor:default"><span class="muted">Mr. Fluent печатает…</span></div>`);
+    box.scrollTop=box.scrollHeight;
+    try{
+      const msgs=[{role:'system',content:AI.PERSONA_CHAT()},...log.slice(-CHAT_MAX)];
+      const reply=await AI.chatTurns(msgs);
+      const l2=store.get('chatLog',[]);l2.push({role:'assistant',content:reply});store.set('chatLog',l2.slice(-60));
+      document.getElementById(tid).outerHTML=chatBubble({role:'assistant',content:reply});
+    }catch(e){document.getElementById(tid).outerHTML=chatBubble({role:'assistant',content:'⚠️ '+e.message});}
+    box.scrollTop=box.scrollHeight;
+  };
+  document.getElementById('chatSend').onclick=send;
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+  input.focus();
+}
+function chatBubble(m){
+  const me=m.role==='user';
+  return `<div style="align-self:${me?'flex-end':'flex-start'};max-width:82%;
+    padding:12px 16px;border-radius:15px;line-height:1.55;font-size:15px;
+    ${me?'background:linear-gradient(135deg,var(--acc),#9a7bff);color:#fff;border-bottom-right-radius:5px':
+        'background:rgba(255,255,255,.04);border:1px solid var(--line);border-bottom-left-radius:5px'}">
+    ${me?esc(m.content):md(m.content)}
+    ${me?'':'<button class="btn ghost sm" style="margin-top:8px" onclick="speak(this.parentElement.innerText)">🔊</button>'}</div>`;
+}
+
 /* ---------- API key modal ---------- */
 const km=document.getElementById('keyModal');
 document.getElementById('keyBtn').onclick=()=>{document.getElementById('keyInput').value=localStorage.getItem('aiProxy')||'';km.classList.remove('hidden');};
@@ -359,6 +438,29 @@ document.getElementById('keySave').onclick=()=>{
   km.classList.add('hidden');toast(v?'Воркер сохранён ✓':'Сброшено к вшитому');
 };
 document.getElementById('keyDefault').onclick=()=>{localStorage.removeItem('aiProxy');km.classList.add('hidden');toast('Используется вшитый воркер');};
+
+/* ---- sync UI ---- */
+const syncState=()=>{const c=localStorage.getItem('syncCode');document.getElementById('syncState').textContent=c?('Включена, код: '+c):'Выключена.';document.getElementById('syncInput').value=c||'';};
+document.getElementById('keyBtn').addEventListener('click',syncState);
+document.getElementById('syncOn').onclick=async()=>{
+  const code=document.getElementById('syncInput').value.trim().toLowerCase();
+  if(code.length<4)return toast('Код минимум 4 символа');
+  if(!AI.hasRealKey())return toast('Нужен подключённый воркер');
+  try{
+    const had=await pullState(code);
+    localStorage.setItem('syncCode',code);
+    if(had){toast('Прогресс загружен ✓');setTimeout(()=>location.reload(),600);}
+    else{await pushState();toast('Синхронизация включена ✓');}
+    syncState();
+  }catch(e){toast('Ошибка: '+e.message);}
+};
+document.getElementById('syncPush').onclick=async()=>{
+  const code=localStorage.getItem('syncCode')||document.getElementById('syncInput').value.trim().toLowerCase();
+  if(code.length<4)return toast('Сначала включи синхронизацию');
+  localStorage.setItem('syncCode',code);
+  try{await pushState();toast('Выгружено ✓');}catch(e){toast('Ошибка: '+e.message);}
+};
+document.getElementById('syncOff').onclick=()=>{localStorage.removeItem('syncCode');syncState();toast('Синхронизация выключена');};
 
 /* ---------- bg particles ---------- */
 (function(){
