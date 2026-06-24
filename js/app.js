@@ -12,6 +12,15 @@ const toast = m => {
   document.body.appendChild(t);setTimeout(()=>t.remove(),2600);
 };
 const esc = s => (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+// озвучка через браузер (Web Speech API), без внешних API
+function speak(text){
+  if(!('speechSynthesis' in window))return toast('Браузер не умеет озвучку');
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=.92;
+  const v=speechSynthesis.getVoices().find(x=>/en[-_]/i.test(x.lang));if(v)u.voice=v;
+  speechSynthesis.speak(u);
+}
+window.speak=speak;
 const loader = msg => `<div class="card fade"><div class="loader"><div class="spin"></div><p class="muted">${msg}</p></div></div>`;
 
 /* ---------- Router ---------- */
@@ -25,6 +34,8 @@ function router(){
   if(path==='/dashboard') return Dashboard();
   if(path==='/practice') return Practice();
   if(path==='/lesson') return Lesson(params.get('t'));
+  if(path==='/write') return Writing();
+  if(path==='/words') return Words();
   Home();
 }
 window.addEventListener('hashchange',router);
@@ -240,6 +251,102 @@ function renderLesson(topic,th,items){
       input.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
     }
   });
+}
+
+/* ---------- Writing (строгая проверка эссе/письма) ---------- */
+const WRITE_TASKS=[
+  "Write an opinion essay (120-180 words): «Online learning is better than traditional school.» Do you agree?",
+  "Write an email to a friend (90-120 words) describing your last trip and inviting them to come next time.",
+  "Write a for-and-against essay (150-200 words): «Social media does more harm than good.»",
+  "Describe your dream job and explain why it suits you (100-150 words).",
+  "Write a complaint email to a hotel about a bad stay (100-140 words), formal register.",
+];
+function Writing(){
+  const task=WRITE_TASKS[Math.floor(Math.random()*WRITE_TASKS.length)];
+  app.innerHTML=`
+  <div class="card fade">
+    <h2 style="margin-bottom:6px">Письмо · строгая проверка</h2>
+    <p class="muted" style="margin-bottom:16px">Mr. Fluent проверит как экзаменатор: найдёт все ошибки, исправит и покажет, что подтянуть.</p>
+    <div class="explain" style="margin-bottom:14px"><b>Задание:</b> <span id="wtask">${esc(task)}</span>
+      <button class="btn ghost sm" id="wnew" style="margin-left:8px">↻ другое</button></div>
+    <textarea id="wtext" placeholder="Пиши свой ответ на английском здесь…" style="width:100%;min-height:200px;padding:15px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:15px;font-family:Inter;line-height:1.6;resize:vertical"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn" id="wcheck">Проверить ✍️</button>
+      <span class="muted" id="wcount">0 слов</span></div>
+    <div id="wres" style="margin-top:18px"></div>
+  </div>`;
+  const ta=document.getElementById('wtext');
+  ta.oninput=()=>document.getElementById('wcount').textContent=(ta.value.trim().match(/\S+/g)||[]).length+' слов';
+  document.getElementById('wnew').onclick=()=>Writing();
+  document.getElementById('wcheck').onclick=async()=>{
+    const text=ta.value.trim();
+    if(text.split(/\s+/).length<15)return toast('Напиши хотя бы пару предложений');
+    const res=document.getElementById('wres');res.innerHTML=loader('Mr. Fluent проверяет твоё письмо…');
+    if(!AI.hasRealKey()){res.innerHTML='<div class="explain">Проверка письма работает только с подключённым ИИ (воркер).</div>';return;}
+    try{
+      const r=await AI.writingCheck(document.getElementById('wtask').textContent,text);
+      renderWriteResult(res,r);
+      const log=store.get('writing',[]);log.push({date:Date.now(),score:r.score,band:r.band});store.set('writing',log.slice(-30));
+    }catch(e){res.innerHTML='<div class="explain"><b>Ошибка:</b> '+esc(e.message)+'</div>';}
+  };
+}
+function renderWriteResult(el,r){
+  const errs=(r.errors||[]).map(e=>`<div style="padding:11px 0;border-top:1px solid var(--line)">
+    <span style="color:var(--bad);text-decoration:line-through">${esc(e.wrong)}</span> →
+    <span style="color:var(--good)">${esc(e.right)}</span>
+    <div class="muted" style="font-size:13px;margin-top:3px"><b style="color:var(--acc2)">${esc(e.rule||'')}</b> — ${esc(e.explain||'')}</div></div>`).join('')
+    || '<p class="muted">Грубых ошибок не найдено — отлично!</p>';
+  const focus=(r.nextFocus||[]).map(f=>`<a class="pill" style="text-decoration:none" href="#/lesson?t=${encodeURIComponent(f)}">${esc(f)} →</a>`).join(' ');
+  el.innerHTML=`
+    <div class="card" style="margin:0">
+      <div class="row" style="justify-content:space-between"><h3>Оценка: <span style="color:var(--acc2)">${esc(r.band||'')}</span></h3><span class="lv" style="font-size:30px">${r.score||0}/100</span></div>
+      <p class="muted" style="margin:6px 0 16px">${esc(r.feedback||'')}</p>
+      <h3 style="margin-bottom:4px">Ошибки</h3>${errs}
+      <h3 style="margin:18px 0 8px">Исправленный вариант <button class="btn ghost sm" onclick="speak(this.nextElementSibling.textContent)">🔊</button></h3>
+      <div class="explain">${esc(r.corrected||'')}</div>
+      ${focus?`<h3 style="margin:18px 0 8px">Что подтянуть</h3><div class="row">${focus}</div>`:''}
+    </div>`;
+}
+
+/* ---------- Words of the day ---------- */
+function Words(){
+  const today=new Date().toISOString().slice(0,10);
+  const cache=store.get('wordsCache',{});
+  if(cache.date===today && cache.words){ renderWords(cache.words,today); return; }
+  app.innerHTML=loader('Mr. Fluent подбирает слова на сегодня…');
+  if(!AI.hasRealKey()){app.innerHTML='<div class="card fade"><div class="empty"><div class="ic">🔌</div><p>Слова дня генерирует ИИ — нужен подключённый воркер.</p></div></div>';return;}
+  AI.dailyWords(AI.level(),6).then(r=>{
+    const words=r.words||[];
+    store.set('wordsCache',{date:today,words});
+    // копим выученные
+    renderWords(words,today);
+  }).catch(e=>app.innerHTML='<div class="card fade"><div class="empty"><div class="ic">⚠️</div><p>'+esc(e.message)+'</p></div></div>');
+}
+function renderWords(words,today){
+  const learned=new Set(store.get('learnedWords',[]).map(w=>w.word));
+  const cards=words.map((w,i)=>`
+    <div class="card" style="margin:0">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="font-size:22px">${esc(w.word)} <button class="btn ghost sm" onclick="speak('${esc(w.word).replace(/'/g,"")}')">🔊</button></h3>
+        <span class="pill">${esc(w.pos||'')}</span>
+      </div>
+      <p class="muted" style="margin:2px 0 8px">${esc(w.ipa||'')} · ${esc(w.ru||'')}</p>
+      <p style="font-style:italic">«${esc(w.example||'')}» <button class="btn ghost sm" onclick="speak('${esc(w.example||'').replace(/'/g,"")}')">🔊</button></p>
+      <p class="muted" style="font-size:13px;margin-top:8px">💡 ${esc(w.tip||'')}</p>
+      <button class="btn ${learned.has(w.word)?'ghost':''} sm" data-learn="${i}" style="margin-top:12px">${learned.has(w.word)?'✓ в словаре':'+ выучил'}</button>
+    </div>`).join('');
+  const total=store.get('learnedWords',[]).length;
+  app.innerHTML=`<div class="card fade level-badge" style="padding:22px">
+      <div class="muted">Слова дня · ${today}</div>
+      <p class="muted" style="margin-top:4px">В твоём словаре: <b style="color:var(--acc2)">${total}</b> слов</p></div>
+    <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">${cards}</div>
+    <div class="row" style="margin-top:18px;justify-content:center">
+      <button class="btn ghost" id="wReroll">↻ Новый набор</button></div>`;
+  app.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{
+    const w=words[+b.dataset.learn];const arr=store.get('learnedWords',[]);
+    if(!arr.find(x=>x.word===w.word)){arr.push({word:w.word,ru:w.ru,date:Date.now()});store.set('learnedWords',arr);}
+    b.className='btn ghost sm';b.textContent='✓ в словаре';toast('Добавлено в словарь');
+  });
+  document.getElementById('wReroll').onclick=()=>{store.set('wordsCache',{});Words();};
 }
 
 /* ---------- API key modal ---------- */
