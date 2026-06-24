@@ -3,7 +3,7 @@
    а воркер уже подставляет секретный API-ключ платной модели.
    Поставь сюда URL своего воркера после деплоя (см. worker/README.md). */
 const AI = (() => {
-  const PROXY = 'https://fluent-ai.YOUR-SUBDOMAIN.workers.dev/chat';
+  const PROXY = 'https://fluent-ai.realfactchecknews.workers.dev/chat';
 
   const proxyReady = () => PROXY && !PROXY.includes('YOUR-SUBDOMAIN');
   // localStorage можно переопределить адрес воркера, не трогая код
