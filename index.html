@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLUENT · AI English Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<header class="topbar">
+  <div class="brand">FLU<span>ENT</span></div>
+  <nav id="nav">
+    <a href="#/" data-route>Главная</a>
+    <a href="#/test" data-route>Тест уровня</a>
+    <a href="#/dashboard" data-route>Прогресс</a>
+    <a href="#/practice" data-route>Прокачка</a>
+  </nav>
+  <button id="keyBtn" class="key-btn" title="API-ключ">⚙</button>
+</header>
+
+<main id="app"></main>
+
+<!-- API key modal -->
+<div id="keyModal" class="modal hidden">
+  <div class="modal-card">
+    <h3>Адрес ИИ-воркера</h3>
+    <p class="muted">Ключ модели спрятан в Cloudflare Worker. По умолчанию используется вшитый в код адрес — менять не нужно. Поле ниже — чтобы переопределить воркер вручную.</p>
+    <input id="keyInput" type="text" placeholder="https://fluent-ai.xxx.workers.dev/chat">
+    <div class="row">
+      <button id="keySave" class="btn">Сохранить</button>
+      <button id="keyDefault" class="btn ghost">Сбросить</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

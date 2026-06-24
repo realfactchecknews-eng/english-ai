@@ -1,0 +1,65 @@
+/* ===== AI layer ===== */
+/* Ключ НЕ хранится в коде. Фронт ходит на Cloudflare Worker (worker/),
+   а воркер уже подставляет секретный API-ключ платной модели.
+   Поставь сюда URL своего воркера после деплоя (см. worker/README.md). */
+const AI = (() => {
+  const PROXY = 'https://fluent-ai.YOUR-SUBDOMAIN.workers.dev/chat';
+
+  const proxyReady = () => PROXY && !PROXY.includes('YOUR-SUBDOMAIN');
+  // localStorage можно переопределить адрес воркера, не трогая код
+  const endpoint = () => localStorage.getItem('aiProxy') || PROXY;
+  const hasRealKey = () => proxyReady() || !!localStorage.getItem('aiProxy');
+
+  async function chat(system, user, {json = true, temp = 0.4} = {}) {
+    if (!hasRealKey()) throw new Error('NO_PROXY');
+    const res = await fetch(endpoint(), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({system, user, json, temp})
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error('API ' + res.status + ': ' + t.slice(0, 160));
+    }
+    const data = await res.json();
+    const txt = data.choices ? data.choices[0].message.content : data.content;
+    return json ? JSON.parse(txt) : txt;
+  }
+
+  // ----- Генерация одного адаптивного вопроса -----
+  // level: число 1..6 (A2..C2 примерно), skill: тема, asked: список прошлых вопросов
+  async function nextQuestion(level, skill, asked) {
+    const cefr = ['A2', 'B1', 'B1+', 'B2', 'B2+', 'C1'][Math.min(level, 5)];
+    const sys = `You are an English placement examiner. Generate ONE multiple-choice question at CEFR ${cefr} testing the skill "${skill}". Return strict JSON: {"question":"...with the gap shown as ___ or a short task","options":["a","b","c","d"],"answer":0,"skill":"${skill}","explain":"short why, in Russian"}. Make distractors plausible. Do not repeat these stems: ${asked.slice(-12).join(' | ') || 'none'}.`;
+    return chat(sys, 'Generate the question now.', {temp: 0.7});
+  }
+
+  // ----- Оценка результатов теста -> уровень + слабые стороны -----
+  async function assess(history) {
+    const sys = `You are a CEFR English assessor. Given a learner's answers, estimate their level and per-skill mastery. Return strict JSON: {"level":"B1+/B2/C1...","summary":"2 sentences in Russian","skills":[{"name":"Grammar","pct":0-100},{"name":"Vocabulary","pct":0-100},{"name":"Use of English","pct":0-100},{"name":"Reading","pct":0-100},{"name":"Tenses","pct":0-100},{"name":"Prepositions","pct":0-100}],"weak":["topic1","topic2","topic3"],"advice":"in Russian, 1-2 sentences"}`;
+    const u = 'Answers (question | chosen | correct | skill):\n' +
+      history.map(h => `${h.q} | ${h.chosen} | ${h.correct} | ${h.skill}`).join('\n');
+    return chat(sys, u, {temp: 0.3});
+  }
+
+  // ----- Теория по теме -----
+  async function theory(topic, level) {
+    const sys = `You are an English tutor. Explain the topic "${topic}" for a ${level} learner whose native language is Russian. Return strict JSON: {"title":"...","html":"explanation as HTML using <h3>,<p>,<ul>,<li>,<code> tags. Explain in Russian, but keep English examples in <code>. Be concrete, ~250 words, with clear rules and 4+ examples."}`;
+    return chat(sys, 'Write the lesson.', {temp: 0.5});
+  }
+
+  // ----- Упражнения по теме -----
+  async function exercises(topic, level, n = 5) {
+    const sys = `Create ${n} practice items for the topic "${topic}" at CEFR ${level}. Mix multiple-choice and fill-in-the-blank. Return strict JSON: {"items":[{"type":"mc","q":"...___...","options":["a","b","c"],"answer":0,"explain":"in Russian"},{"type":"fill","q":"...___...","answer":"word","alt":["accepted variant"],"explain":"in Russian"}]}`;
+    return chat(sys, 'Generate now.', {temp: 0.6});
+  }
+
+  // ----- Проверка письменного ответа (fill) когда нужно гибко -----
+  function checkFill(userAns, item) {
+    const norm = s => (s || '').trim().toLowerCase().replace(/[.,!?]/g, '');
+    const acc = [item.answer, ...(item.alt || [])].map(norm);
+    return acc.includes(norm(userAns));
+  }
+
+  return {chat, nextQuestion, assess, theory, exercises, checkFill, hasRealKey};
+})();

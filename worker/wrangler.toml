@@ -1,0 +1,10 @@
+name = "fluent-ai"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Не секретные переменные можно держать тут. API_KEY задаётся через
+# `wrangler secret put API_KEY` или в дашборде как Secret — в файл не пиши.
+[vars]
+BASE_URL = "https://api.openai.com/v1/chat/completions"
+MODEL = "gpt-4o-mini"
+ALLOW_ORIGIN = "https://realfactchecknews-eng.github.io"
