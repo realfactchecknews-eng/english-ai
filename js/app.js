@@ -3,7 +3,7 @@ const app = document.getElementById('app');
 const SKILLS = ["Tenses","Prepositions","Use of English","Grammar","Vocabulary","Reading"];
 const TEST_LEN = 10;
 
-const SYNC_KEYS=['profile','attempts','writing','learnedWords','wordsCache','chatLog'];
+const SYNC_KEYS=['profile','attempts','writing','learnedWords','wordsCache','chatLog','deck','lastDaily'];
 const store = {
   get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},
   set:(k,v)=>{localStorage.setItem(k,JSON.stringify(v));if(SYNC_KEYS.includes(k))schedulePush();},
@@ -55,6 +55,8 @@ function router(){
   if(path==='/write') return Writing();
   if(path==='/words') return Words();
   if(path==='/chat') return Chat();
+  if(path==='/theory') return Theory();
+  if(path==='/theory-read') return TheoryRead(params.get('t'));
   Home();
 }
 window.addEventListener('hashchange',router);
@@ -282,90 +284,194 @@ const WRITE_TASKS=[
 ];
 function Writing(){
   const task=WRITE_TASKS[Math.floor(Math.random()*WRITE_TASKS.length)];
+  const hist=store.get('writing',[]);
+  const histHtml=hist.slice().reverse().slice(0,15).map((h,i)=>`
+    <div class="topic" data-h="${hist.length-1-i}" style="cursor:pointer">
+      <span class="tag ${h.score>=73?'ok':'weak'}">${esc(h.band||'')} · ${h.score||0}/100</span>
+      <p class="muted" style="font-size:12px">${new Date(h.date).toLocaleDateString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
+      <p style="font-size:13px;margin-top:4px">${esc((h.task||'').slice(0,70))}…</p></div>`).join('')
+    ||'<p class="muted">Пока нет проверок. Напиши первое эссе!</p>';
   app.innerHTML=`
-  <div class="card fade">
-    <h2 style="margin-bottom:6px">Письмо · строгая проверка</h2>
-    <p class="muted" style="margin-bottom:16px">Mr. Fluent проверит как экзаменатор: найдёт все ошибки, исправит и покажет, что подтянуть.</p>
+  <div class="tabs">
+    <div class="tab active" data-tab="new">Новое письмо</div>
+    <div class="tab" data-tab="hist">История (${hist.length})</div>
+  </div>
+  <div id="wnewWrap" class="card fade">
+    <h2 style="margin-bottom:6px">Письмо · подробная проверка</h2>
+    <p class="muted" style="margin-bottom:14px">Выбери готовую тему или впиши свою. Mr. Fluent разберёт по критериям, исправит и оценит честно.</p>
+    <div class="row" style="margin-bottom:10px">
+      <input id="wtopic" placeholder="Своя тема (необязательно)…" style="flex:1;min-width:220px;padding:12px 15px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:14px">
+    </div>
     <div class="explain" style="margin-bottom:14px"><b>Задание:</b> <span id="wtask">${esc(task)}</span>
       <button class="btn ghost sm" id="wnew" style="margin-left:8px">↻ другое</button></div>
-    <textarea id="wtext" placeholder="Пиши свой ответ на английском здесь…" style="width:100%;min-height:200px;padding:15px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:15px;font-family:Inter;line-height:1.6;resize:vertical"></textarea>
+    <textarea id="wtext" placeholder="Пиши свой ответ на английском здесь…" style="width:100%;min-height:220px;padding:15px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:15px;font-family:Inter;line-height:1.6;resize:vertical"></textarea>
     <div class="row" style="margin-top:14px"><button class="btn" id="wcheck">Проверить ✍️</button>
       <span class="muted" id="wcount">0 слов</span></div>
     <div id="wres" style="margin-top:18px"></div>
-  </div>`;
+  </div>
+  <div id="whistWrap" class="card fade" style="display:none"><h2 style="margin-bottom:14px">История проверок</h2>
+    <div class="topics">${histHtml}</div></div>`;
+  // tabs
+  app.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+    app.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+    document.getElementById('wnewWrap').style.display=t.dataset.tab==='new'?'':'none';
+    document.getElementById('whistWrap').style.display=t.dataset.tab==='hist'?'':'none';
+  });
+  app.querySelectorAll('[data-h]').forEach(c=>c.onclick=()=>{
+    const r=store.get('writing',[])[+c.dataset.h];if(r&&r.full)showWritingResult(r.full,true);
+  });
   const ta=document.getElementById('wtext');
+  const topic=document.getElementById('wtopic');
+  topic.oninput=()=>{if(topic.value.trim())document.getElementById('wtask').textContent=topic.value.trim();};
   ta.oninput=()=>document.getElementById('wcount').textContent=(ta.value.trim().match(/\S+/g)||[]).length+' слов';
-  document.getElementById('wnew').onclick=()=>Writing();
+  document.getElementById('wnew').onclick=()=>{if(!topic.value.trim())Writing();};
   document.getElementById('wcheck').onclick=async()=>{
     const text=ta.value.trim();
-    if(text.split(/\s+/).length<15)return toast('Напиши хотя бы пару предложений');
-    const res=document.getElementById('wres');res.innerHTML=loader('Mr. Fluent проверяет твоё письмо…');
+    if((text.match(/\S+/g)||[]).length<15)return toast('Напиши хотя бы пару предложений');
+    const res=document.getElementById('wres');res.innerHTML=loader('Mr. Fluent внимательно читает твоё письмо…');
     if(!AI.hasRealKey()){res.innerHTML='<div class="explain">Проверка письма работает только с подключённым ИИ (воркер).</div>';return;}
+    const tk=document.getElementById('wtask').textContent;
     try{
-      const r=await AI.writingCheck(document.getElementById('wtask').textContent,text);
+      const r=await AI.writingCheck(tk,text);
       renderWriteResult(res,r);
-      const log=store.get('writing',[]);log.push({date:Date.now(),score:r.score,band:r.band});store.set('writing',log.slice(-30));
+      const log=store.get('writing',[]);
+      log.push({date:Date.now(),score:r.score,band:r.band,task:tk,full:r});
+      store.set('writing',log.slice(-40));
     }catch(e){res.innerHTML='<div class="explain"><b>Ошибка:</b> '+esc(e.message)+'</div>';}
   };
+}
+function showWritingResult(r,modal){
+  // открыть историческую проверку поверх
+  Writing();
+  setTimeout(()=>{document.querySelector('[data-tab="new"]').click();renderWriteResult(document.getElementById('wres'),r);
+    document.getElementById('wres').scrollIntoView({behavior:'smooth'});},30);
 }
 function renderWriteResult(el,r){
   const errs=(r.errors||[]).map(e=>`<div style="padding:11px 0;border-top:1px solid var(--line)">
     <span style="color:var(--bad);text-decoration:line-through">${esc(e.wrong)}</span> →
     <span style="color:var(--good)">${esc(e.right)}</span>
     <div class="muted" style="font-size:13px;margin-top:3px"><b style="color:var(--acc2)">${esc(e.rule||'')}</b> — ${esc(e.explain||'')}</div></div>`).join('')
-    || '<p class="muted">Грубых ошибок не найдено — отлично!</p>';
+    || '<p class="muted">No real errors found — great job!</p>';
+  const crit=(r.criteria||[]).map(c=>{
+    const col=c.score<50?'var(--bad)':c.score<73?'var(--warn)':'var(--good)';
+    return `<div class="crit"><span class="nm">${esc(c.name)}</span>
+      <div class="bar"><i style="width:${c.score}%;background:${col}"></i></div>
+      <span class="pct">${c.score}</span></div>
+      <p class="muted" style="font-size:12px;margin:-2px 0 6px">${esc(c.note||'')}</p>`;
+  }).join('');
+  const strengths=(r.strengths||[]).map(s=>`<li>${esc(s)}</li>`).join('');
   const focus=(r.nextFocus||[]).map(f=>`<a class="pill" style="text-decoration:none" href="#/lesson?t=${encodeURIComponent(f)}">${esc(f)} →</a>`).join(' ');
   el.innerHTML=`
     <div class="card" style="margin:0">
-      <div class="row" style="justify-content:space-between"><h3>Оценка: <span style="color:var(--acc2)">${esc(r.band||'')}</span></h3><span class="lv" style="font-size:30px">${r.score||0}/100</span></div>
-      <p class="muted" style="margin:6px 0 16px">${esc(r.feedback||'')}</p>
-      <h3 style="margin-bottom:4px">Ошибки</h3>${errs}
-      <h3 style="margin:18px 0 8px">Исправленный вариант <button class="btn ghost sm" onclick="speak(this.nextElementSibling.textContent)">🔊</button></h3>
-      <div class="explain">${esc(r.corrected||'')}</div>
-      ${focus?`<h3 style="margin:18px 0 8px">Что подтянуть</h3><div class="row">${focus}</div>`:''}
+      <div class="row" style="justify-content:space-between"><h3>Band: <span style="color:var(--acc2)">${esc(r.band||'')}</span></h3><span class="lv" style="font-size:32px">${r.score||0}<span style="font-size:16px">/100</span></span></div>
+      ${crit?`<div style="margin:14px 0">${crit}</div>`:''}
+      ${strengths?`<h3 style="margin:14px 0 6px;color:var(--good)">What's good</h3><ul class="theory">${strengths}</ul>`:''}
+      <p class="muted" style="margin:14px 0 16px;line-height:1.6">${esc(r.feedback||'')}</p>
+      <h3 style="margin-bottom:4px">Errors</h3>${errs}
+      <h3 style="margin:18px 0 8px">Corrected version <button class="btn ghost sm" onclick="speak(this.nextElementSibling.textContent)">🔊</button></h3>
+      <div class="explain" style="line-height:1.7">${esc(r.corrected||'')}</div>
+      ${focus?`<h3 style="margin:18px 0 8px">Drill these next</h3><div class="row">${focus}</div>`:''}
     </div>`;
 }
 
-/* ---------- Words of the day ---------- */
-function Words(){
-  const today=new Date().toISOString().slice(0,10);
-  const cache=store.get('wordsCache',{});
-  if(cache.date===today && cache.words){ renderWords(cache.words,today); return; }
-  app.innerHTML=loader('Mr. Fluent подбирает слова на сегодня…');
-  if(!AI.hasRealKey()){app.innerHTML='<div class="card fade"><div class="empty"><div class="ic">🔌</div><p>Слова дня генерирует ИИ — нужен подключённый воркер.</p></div></div>';return;}
-  AI.dailyWords(AI.level(),6).then(r=>{
-    const words=r.words||[];
-    store.set('wordsCache',{date:today,words});
-    // копим выученные
-    renderWords(words,today);
-  }).catch(e=>app.innerHTML='<div class="card fade"><div class="empty"><div class="ic">⚠️</div><p>'+esc(e.message)+'</p></div></div>');
+/* ---------- Колоды слов (Anki-style SRS) ---------- */
+const DAY=86400000, NEW_PER_DAY=5;
+function getDeck(){return store.get('deck',[]);}
+function addToDeck(w){ // w: {w,ipa,pos,def,ex,syn}
+  const deck=getDeck();
+  if(deck.find(c=>c.w.toLowerCase()===w.w.toLowerCase()))return false;
+  deck.push({...w,due:Date.now(),interval:0,ease:2.3,reps:0,added:Date.now()});
+  store.set('deck',deck);return true;
 }
-function renderWords(words,today){
-  const learned=new Set(store.get('learnedWords',[]).map(w=>w.word));
-  const cards=words.map((w,i)=>`
-    <div class="card" style="margin:0">
-      <div class="row" style="justify-content:space-between">
-        <h3 style="font-size:22px">${esc(w.word)} <button class="btn ghost sm" onclick="speak('${esc(w.word).replace(/'/g,"")}')">🔊</button></h3>
-        <span class="pill">${esc(w.pos||'')}</span>
+function seedDaily(){
+  const today=new Date().toISOString().slice(0,10);
+  if(store.get('lastDaily','')===today)return;
+  const deck=getDeck();const have=new Set(deck.map(c=>c.w.toLowerCase()));
+  const pool=WORDBANK.filter(w=>!have.has(w.w.toLowerCase()));
+  // перемешать и взять 5
+  for(let i=pool.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[pool[i],pool[j]]=[pool[j],pool[i]];}
+  pool.slice(0,NEW_PER_DAY).forEach(w=>addToDeck({w:w.w,ipa:w.ipa,pos:w.pos,def:w.def,ex:w.ex,syn:w.syn}));
+  store.set('lastDaily',today);
+}
+function dueCards(){const n=Date.now();return getDeck().filter(c=>c.due<=n);}
+function Words(){
+  seedDaily();
+  const deck=getDeck();const due=dueCards();
+  const newToday=deck.filter(c=>Date.now()-c.added<DAY);
+  const mastered=deck.filter(c=>c.interval>=21).length;
+  app.innerHTML=`
+  <div class="card fade level-badge" style="padding:24px">
+    <div class="muted">Твоя колода слов</div>
+    <div class="deckstat">
+      <div><b style="color:var(--acc2)">${deck.length}</b><span class="muted">всего</span></div>
+      <div><b style="color:var(--warn)">${due.length}</b><span class="muted">к повтору</span></div>
+      <div><b style="color:var(--good)">${mastered}</b><span class="muted">выучено</span></div>
+    </div>
+    <div class="row" style="justify-content:center;margin-top:8px">
+      <button class="btn" id="rev" ${due.length?'':'disabled'}>Повторить ${due.length?`(${due.length})`:'— всё на сегодня'}</button>
+      <button class="btn ghost" id="addMore">+ Добавить 5 слов</button>
+    </div>
+  </div>
+  <h2 style="margin:22px 0 6px;font-family:Sora">Новые сегодня</h2>
+  <p class="muted" style="margin-bottom:14px">5 свежих слов в день. Жми «Повторить» и зубри как в Anki — система сама напомнит их в нужный момент.</p>
+  <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))" id="todayList">${newToday.map(wordCard).join('')||'<p class="muted">Сегодня всё повторено 💪</p>'}</div>`;
+  document.getElementById('rev').onclick=()=>review(dueCards());
+  document.getElementById('addMore').onclick=()=>{store.set('lastDaily','');seedDaily();Words();toast('Добавлено 5 слов');};
+}
+function wordCard(c){
+  return `<div class="card" style="margin:0">
+    <div class="row" style="justify-content:space-between">
+      <h3 style="font-size:21px">${esc(c.w)} <button class="btn ghost sm" onclick="speak('${esc(c.w).replace(/'/g,"")}')">🔊</button></h3>
+      <span class="pill">${esc(c.pos||'')}</span></div>
+    <p class="muted" style="margin:2px 0 8px">${esc(c.ipa||'')} · ${esc(c.def||'')}</p>
+    <p style="font-style:italic">«${esc(c.ex||'')}»</p>
+    ${c.syn?`<p class="muted" style="font-size:13px;margin-top:8px">≈ ${esc(c.syn)}</p>`:''}</div>`;
+}
+// SRS-сессия
+function review(queue){
+  if(!queue.length){toast('Нечего повторять');return Words();}
+  let idx=0;
+  const show=()=>{
+    if(idx>=queue.length){app.innerHTML=`<div class="card fade"><div class="empty"><div class="ic">🎉</div><h2>Сессия закончена!</h2><p class="muted">Повторено ${queue.length} слов. Возвращайся завтра.</p><a class="btn" style="margin-top:16px" href="#/words">К колоде</a></div></div>`;return;}
+    const c=queue[idx];
+    app.innerHTML=`
+    <div class="row" style="justify-content:space-between;margin-bottom:14px">
+      <a class="btn ghost sm" href="#/words">← Выход</a><span class="muted">${idx+1} / ${queue.length}</span></div>
+    <div class="flash" id="flash">
+      <div class="flash-inner">
+        <div class="flash-face">
+          <div class="wd">${esc(c.w)}</div><div class="ipa">${esc(c.ipa||'')}</div>
+          <button class="btn ghost sm" onclick="event.stopPropagation();speak('${esc(c.w).replace(/'/g,"")}')">🔊</button>
+          <p class="muted" style="margin-top:14px">Нажми, чтобы увидеть значение</p>
+        </div>
+        <div class="flash-face flash-back">
+          <span class="pill">${esc(c.pos||'')}</span>
+          <div style="font-size:16px;margin:6px 0">${esc(c.def||'')}</div>
+          <p style="font-style:italic;font-size:14px">«${esc(c.ex||'')}»</p>
+          ${c.syn?`<p class="muted" style="font-size:13px">≈ ${esc(c.syn)}</p>`:''}
+        </div>
       </div>
-      <p class="muted" style="margin:2px 0 8px">${esc(w.ipa||'')} · ${esc(w.def||w.ru||'')}</p>
-      <p style="font-style:italic">«${esc(w.example||'')}» <button class="btn ghost sm" onclick="speak('${esc(w.example||'').replace(/'/g,"")}')">🔊</button></p>
-      <p class="muted" style="font-size:13px;margin-top:8px">💡 ${esc(w.tip||'')}</p>
-      <button class="btn ${learned.has(w.word)?'ghost':''} sm" data-learn="${i}" style="margin-top:12px">${learned.has(w.word)?'✓ в словаре':'+ выучил'}</button>
-    </div>`).join('');
-  const total=store.get('learnedWords',[]).length;
-  app.innerHTML=`<div class="card fade level-badge" style="padding:22px">
-      <div class="muted">Слова дня · ${today}</div>
-      <p class="muted" style="margin-top:4px">В твоём словаре: <b style="color:var(--acc2)">${total}</b> слов</p></div>
-    <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">${cards}</div>
-    <div class="row" style="margin-top:18px;justify-content:center">
-      <button class="btn ghost" id="wReroll">↻ Новый набор</button></div>`;
-  app.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{
-    const w=words[+b.dataset.learn];const arr=store.get('learnedWords',[]);
-    if(!arr.find(x=>x.word===w.word)){arr.push({word:w.word,def:w.def||w.ru,date:Date.now()});store.set('learnedWords',arr);}
-    b.className='btn ghost sm';b.textContent='✓ в словаре';toast('Добавлено в словарь');
-  });
-  document.getElementById('wReroll').onclick=()=>{store.set('wordsCache',{});Words();};
+    </div>
+    <div class="srs-btns" id="srs" style="display:none">
+      <button class="again" data-g="0">Again</button>
+      <button data-g="1">Hard</button>
+      <button class="good" data-g="2">Good</button>
+      <button class="easy" data-g="3">Easy</button>
+    </div>`;
+    const fl=document.getElementById('flash');
+    fl.onclick=()=>{fl.classList.add('flip');document.getElementById('srs').style.display='grid';};
+    document.querySelectorAll('#srs button').forEach(b=>b.onclick=()=>{grade(c,+b.dataset.g);idx++;show();});
+  };
+  show();
+}
+function grade(card,g){
+  const deck=getDeck();const c=deck.find(x=>x.w===card.w);if(!c)return;
+  c.reps=(c.reps||0)+1;
+  if(g===0){c.interval=0;c.ease=Math.max(1.3,c.ease-0.2);c.due=Date.now()+10*60000;}
+  else if(g===1){c.interval=Math.max(1,(c.interval||1)*1.2);c.ease=Math.max(1.3,c.ease-0.15);c.due=Date.now()+c.interval*DAY;}
+  else if(g===2){c.interval=c.interval<1?1:c.interval*c.ease;c.due=Date.now()+c.interval*DAY;}
+  else{c.ease+=0.15;c.interval=(c.interval<1?2:c.interval*c.ease*1.3);c.due=Date.now()+c.interval*DAY;}
+  store.set('deck',deck);
 }
 
 /* ---------- Chat с Mr. Fluent (с памятью) ---------- */
@@ -427,6 +533,69 @@ function chatBubble(m){
     ${me?esc(m.content):md(m.content)}
     ${me?'':'<button class="btn ghost sm" style="margin-top:8px" onclick="speak(this.parentElement.innerText)">🔊</button>'}</div>`;
 }
+
+/* ---------- Теория (справочник) ---------- */
+const THEORY_TOPICS=["Tenses","Conditionals","Articles","Modal verbs","Reported speech","Passive voice","Prepositions","Phrasal verbs","Use of English","Grammar","Vocabulary","Gerunds & Infinitives","Relative clauses","Comparatives & Superlatives","Word order & Inversion","Future forms"];
+function Theory(){
+  const cards=THEORY_TOPICS.map(t=>`<a class="topic" href="#/theory-read?t=${encodeURIComponent(t)}">
+    <span class="tag ok">теория</span><h3>${esc(t)}</h3><p>Правила + примеры →</p></a>`).join('');
+  app.innerHTML=`<div class="card fade"><h2 style="margin-bottom:6px">Теория · справочник грамматики</h2>
+    <p class="muted" style="margin-bottom:16px">Чистая теория с примерами. ИИ объяснит любую тему; в конце — кнопка перейти к упражнениям.</p>
+    <div class="topics">${cards}</div></div>`;
+}
+async function TheoryRead(topic){
+  topic=topic||'Tenses';
+  const lvl=store.get('profile',{}).level||'B2';
+  app.innerHTML=loader('Готовлю теорию по теме «'+esc(topic)+'»…');
+  let th;
+  if(AI.hasRealKey()){try{th=await AI.theory(topic,lvl);}catch(e){th=offTheory(topic);}}
+  else th=offTheory(topic);
+  app.innerHTML=`
+  <div class="row" style="margin-bottom:16px"><a class="btn ghost sm" href="#/theory">← Все темы</a>
+    <a class="btn ghost sm" href="#/lesson?t=${encodeURIComponent(topic)}">К упражнениям →</a></div>
+  <div class="card fade theory"><h2>${esc(th.title||topic)}</h2>${th.html||''}</div>`;
+}
+
+/* ---------- Словарь по клику (двойной клик по слову) ---------- */
+const lookupEl=document.getElementById('lookup');
+let lookupCache=store.get('lookupCache',{});
+function hideLookup(){lookupEl.classList.add('hidden');}
+document.addEventListener('click',e=>{if(!lookupEl.contains(e.target))hideLookup();});
+document.addEventListener('dblclick',async e=>{
+  if(lookupEl.contains(e.target))return;
+  const sel=(window.getSelection().toString()||'').trim();
+  if(!sel||sel.length<2||sel.length>40||/[^a-zA-Z' -]/.test(sel))return;
+  const ctx=e.target.textContent?e.target.textContent.slice(0,160):'';
+  const x=Math.min(e.clientX,innerWidth-340),y=e.clientY+14;
+  lookupEl.style.left=Math.max(10,x)+'px';lookupEl.style.top=y+'px';
+  lookupEl.classList.remove('hidden');
+  const key=sel.toLowerCase();
+  if(lookupCache[key]){renderLookup(lookupCache[key]);return;}
+  lookupEl.innerHTML='<div class="loader" style="padding:14px"><div class="spin" style="width:24px;height:24px"></div></div>';
+  if(!AI.hasRealKey()){lookupEl.innerHTML='<p class="muted">Connect AI to look up words.</p>';return;}
+  try{
+    const d=await AI.lookup(sel,ctx);
+    lookupCache[key]=d;store.set('lookupCache',lookupCache);
+    renderLookup(d);
+  }catch(err){lookupEl.innerHTML='<p class="muted">No definition found.</p>';}
+});
+function renderLookup(d){
+  const syn=(d.syn||[]).length?`<div class="syn"><b>syn:</b> ${esc((d.syn||[]).join(', '))}</div>`:'';
+  const ant=(d.ant||[]).length?`<div class="syn"><b>opp:</b> ${esc((d.ant||[]).join(', '))}</div>`:'';
+  lookupEl.innerHTML=`
+    <h4>${esc(d.word||'')} <span class="sp" onclick="speak('${esc(d.word||'').replace(/'/g,"")}')">🔊</span></h4>
+    <div class="pos">${esc(d.ipa||'')} · ${esc(d.pos||'')}</div>
+    <p style="margin:8px 0 4px">${esc(d.def||'')}</p>
+    ${d.example?`<p class="muted" style="font-style:italic">«${esc(d.example)}»</p>`:''}
+    ${syn}${ant}
+    <button class="btn sm" style="margin-top:10px" onclick="addLookupToDeck('${esc((d.word||'').replace(/'/g,''))}')">+ в колоду</button>`;
+}
+function addLookupToDeck(word){
+  const d=lookupCache[word.toLowerCase()];if(!d)return;
+  const ok=addToDeck({w:d.word,ipa:d.ipa,pos:d.pos,def:d.def,ex:d.example,syn:(d.syn||[]).join(', ')});
+  toast(ok?'Добавлено в колоду ✓':'Уже в колоде');hideLookup();
+}
+window.addLookupToDeck=addLookupToDeck;
 
 /* ---------- API key modal ---------- */
 const km=document.getElementById('keyModal');

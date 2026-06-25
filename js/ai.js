@@ -85,10 +85,35 @@ const AI = (() => {
     return chat(sys, 'Generate now.', {temp: 0.6});
   }
 
-  // ----- Строгая проверка письма (эссе/письмо) -----
+  // ----- Подробная проверка письма (эссе/письмо) -----
   async function writingCheck(task, text) {
-    const sys = PERSONA() + `The student wrote a piece responding to a task. Grade it STRICTLY like a CEFR examiner — be demanding, catch everything: grammar, tenses, articles, prepositions, word choice, register, punctuation. Return strict JSON: {"band":"e.g. B1+","score":0,"corrected":"the full corrected version of the text","errors":[{"wrong":"exact bad fragment","right":"fixed version","rule":"short rule name","explain":"in English, why it's wrong"}],"feedback":"3-4 sentences in English: honest verdict, biggest weaknesses first","nextFocus":["grammar topic to drill","another topic"]}. List EVERY real error, do not be lenient.`;
+    const sys = PERSONA() + `Assess the student's writing thoroughly, like an experienced examiner who also coaches. Be detailed and generous in length — do NOT cut your feedback short.
+
+SCORING (0-100) must MATCH the band, use this calibration:
+A2 ≈ 35-48 · B1 ≈ 50-62 · B1+ ≈ 63-72 · B2 ≈ 73-84 · B2+ ≈ 85-90 · C1 ≈ 90-96 · C2 ≈ 97-100.
+A typical correct, well-organised B2 essay should score around 75-82, NOT 15. Only give a very low score for almost incomprehensible writing.
+
+The "corrected" version MUST be fully correct, natural and error-free — re-read it and make sure YOU would not flag any mistakes in it. Do not list errors that you have already fixed in the corrected version.
+
+Return strict JSON:
+{
+ "band":"e.g. B2",
+ "score":0,
+ "criteria":[{"name":"Task achievement","score":0,"note":"1 sentence"},{"name":"Coherence & cohesion","score":0,"note":"..."},{"name":"Grammar range & accuracy","score":0,"note":"..."},{"name":"Vocabulary","score":0,"note":"..."}],
+ "strengths":["specific good thing","another"],
+ "errors":[{"wrong":"exact fragment from the STUDENT's original","right":"corrected version","rule":"short rule name","explain":"clear why, in English"}],
+ "corrected":"the full corrected, polished version",
+ "feedback":"5-7 sentences in English: honest overall verdict, what to improve, and concrete upgrade tips (e.g. better linkers or vocabulary). Encouraging but real.",
+ "nextFocus":["grammar topic to drill","another topic"]
+}
+List every real error from the ORIGINAL, but keep numbers consistent with the band.`;
     return chat(sys, `Task: ${task || 'free writing'}\n\nStudent's text:\n${text}`, {temp: 0.2});
+  }
+
+  // ----- Быстрый словарь: клик по слову -----
+  async function lookup(word, context) {
+    const sys = `You are an English dictionary. For the given word/phrase, reply in ENGLISH ONLY (no other language). Return strict JSON: {"word":"...","ipa":"/.../","pos":"part of speech","def":"clear simple definition","example":"a natural example sentence","syn":["synonym","synonym"],"ant":["antonym"]}. If a context sentence is given, define the sense used there.`;
+    return chat(sys, `Word: ${word}${context ? `\nContext: ${context}` : ''}`, {temp: 0.2});
   }
 
   // ----- Слова дня -----
@@ -106,5 +131,5 @@ const AI = (() => {
 
   const PERSONA_CHAT = () => PERSONA() + 'You are now in free chat mode. Answer the student\'s questions, explain grammar/vocabulary topics clearly in English, and when asked — give exercises and check answers strictly. Keep replies focused and not too long. Use simple Markdown.';
 
-  return {chat, chatTurns, PERSONA_CHAT, syncSave, syncLoad, nextQuestion, assess, theory, exercises, writingCheck, dailyWords, checkFill, hasRealKey, level, base};
+  return {chat, chatTurns, PERSONA_CHAT, syncSave, syncLoad, nextQuestion, assess, theory, exercises, writingCheck, dailyWords, lookup, checkFill, hasRealKey, level, base};
 })();

@@ -118,7 +118,48 @@ main{max-width:980px;margin:0 auto;padding:34px 20px 90px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10142a;border:1px solid var(--line);
   padding:13px 22px;border-radius:13px;z-index:60;box-shadow:var(--shadow);animation:fade .3s;font-size:14px}
 
+/* Word lookup popup */
+.lookup{position:fixed;z-index:80;max-width:320px;background:#0d1020;border:1px solid var(--line);
+  border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);font-size:14px;line-height:1.5;animation:fade .15s}
+.lookup.hidden{display:none}
+.lookup h4{font-family:Sora;font-size:18px;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+.lookup .pos{color:var(--acc2);font-size:12px}
+.lookup .muted{font-size:13px}
+.lookup .syn{margin-top:8px;font-size:13px}
+.lookup .syn b{color:var(--acc)}
+.lookup .sp{cursor:pointer;opacity:.7}
+.lookselect{cursor:pointer;border-bottom:1px dashed transparent;transition:.15s}
+
+/* Flashcards / SRS */
+.flash{perspective:1200px;margin:0 auto;max-width:520px}
+.flash-inner{position:relative;min-height:220px;text-align:center;transition:transform .5s;transform-style:preserve-3d}
+.flash.flip .flash-inner{transform:rotateY(180deg)}
+.flash-face{position:absolute;inset:0;backface-visibility:hidden;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;padding:30px;
+  background:var(--panel);border:1px solid var(--line);border-radius:18px}
+.flash-back{transform:rotateY(180deg)}
+.flash-face .wd{font-family:Sora;font-size:34px;font-weight:800}
+.flash-face .ipa{color:var(--muted)}
+.srs-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;margin:16px auto 0}
+.srs-btns button{padding:11px 4px;border-radius:11px;border:1px solid var(--line);cursor:pointer;
+  font-weight:700;font-size:13px;font-family:Sora;color:var(--txt);background:rgba(255,255,255,.03)}
+.srs-btns button:hover{transform:translateY(-2px)}
+.srs-btns .again{border-color:var(--bad);color:var(--bad)}
+.srs-btns .good{border-color:var(--good);color:var(--good)}
+.srs-btns .easy{border-color:var(--acc2);color:var(--acc2)}
+.deckstat{display:flex;gap:18px;justify-content:center;margin:10px 0}
+.deckstat div{text-align:center}
+.deckstat b{font-size:24px;font-family:Sora;display:block}
+
+.crit{display:grid;grid-template-columns:160px 1fr 40px;align-items:center;gap:12px;margin:8px 0}
+.crit .nm{font-size:13px;font-weight:600}
+.tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:9px 16px;border-radius:11px;border:1px solid var(--line);cursor:pointer;font-weight:600;font-size:14px;color:var(--muted)}
+.tab.active{background:rgba(108,140,255,.18);color:var(--txt)}
+
 @media(max-width:600px){
+  .crit{grid-template-columns:110px 1fr 36px}
+  .flash-face .wd{font-size:28px}
   #nav a{padding:7px 10px;font-size:13px}
   .skill{grid-template-columns:100px 1fr 40px}
   main{padding:22px 14px 80px}
