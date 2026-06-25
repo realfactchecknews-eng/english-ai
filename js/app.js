@@ -57,13 +57,22 @@ function router(){
   if(path==='/chat') return Chat();
   if(path==='/theory') return Theory();
   if(path==='/theory-read') return TheoryRead(params.get('t'));
+  if(path==='/deck') return DeckView(params.get('id'));
   Home();
 }
 window.addEventListener('hashchange',router);
 
+/* ---------- Topic of the day ---------- */
+const COMPLEX_TOPICS=["Conditionals","Reported speech","Passive voice","Modal verbs","Word order & Inversion","Relative clauses","Gerunds & Infinitives","Future forms","Tenses","Articles"];
+function todaysTopic(){
+  const day=Math.floor(Date.now()/DAY);
+  return COMPLEX_TOPICS[day%COMPLEX_TOPICS.length];
+}
+
 /* ---------- Home ---------- */
 function Home(){
   const prof = store.get('profile',null);
+  const tt = todaysTopic();
   app.innerHTML = `
   <div class="hero fade">
     <span class="badge">AI English Coach · B1+ → B2 → C1</span>
@@ -72,6 +81,15 @@ function Home(){
     <div class="row" style="justify-content:center">
       <a class="btn" href="#/test">${prof?'Retake the test':'Take the level test'}</a>
       ${prof?`<a class="btn ghost" href="#/dashboard">My progress (${prof.level})</a>`:''}
+    </div>
+    <div class="card" style="max-width:560px;margin:30px auto 0;text-align:left;border-color:var(--acc2)">
+      <div class="muted" style="font-size:13px;letter-spacing:.5px">📅 TOPIC OF THE DAY</div>
+      <h3 style="font-size:22px;margin:6px 0 8px">${esc(tt)}</h3>
+      <p class="muted" style="margin-bottom:14px">Today's complex grammar focus — read the theory, then drill it with exercises.</p>
+      <div class="row">
+        <a class="btn sm" href="#/theory-read?t=${encodeURIComponent(tt)}">Read theory →</a>
+        <a class="btn ghost sm" href="#/lesson?t=${encodeURIComponent(tt)}">Practice →</a>
+      </div>
     </div>
     <div class="feature-grid">
       <div class="feat"><div class="ic">🎯</div><h3>Adaptive test</h3><p>Questions adjust to your answers and pin down your exact CEFR level.</p></div>
@@ -390,42 +408,71 @@ function seedDaily(){
   const pool=WORDBANK.filter(w=>!have.has(w.w.toLowerCase()));
   // перемешать и взять 5
   for(let i=pool.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[pool[i],pool[j]]=[pool[j],pool[i]];}
-  pool.slice(0,NEW_PER_DAY).forEach(w=>addToDeck({w:w.w,ipa:w.ipa,pos:w.pos,def:w.def,ex:w.ex,syn:w.syn}));
+  pool.slice(0,NEW_PER_DAY).forEach(w=>addToDeck(w));
   store.set('lastDaily',today);
 }
 function dueCards(){const n=Date.now();return getDeck().filter(c=>c.due<=n);}
+function inStudy(cat){const s=new Set(getDeck().map(c=>c.w));return DECKS.find(d=>d.id===cat).words.filter(w=>s.has(w.w)).length;}
 function Words(){
   seedDaily();
   const deck=getDeck();const due=dueCards();
-  const newToday=deck.filter(c=>Date.now()-c.added<DAY);
   const mastered=deck.filter(c=>c.interval>=21).length;
+  const deckCards=DECKS.map(d=>{
+    const have=inStudy(d.id);
+    return `<a class="topic" href="#/deck?id=${d.id}">
+      <span class="tag ${d.lvl==='C1'?'weak':'ok'}">${d.lvl}</span>
+      <h3>${d.icon} ${esc(d.name)}</h3>
+      <p class="muted" style="font-size:13px">${d.words.length} words · ${have} in study</p></a>`;
+  }).join('');
   app.innerHTML=`
   <div class="card fade level-badge" style="padding:24px">
-    <div class="muted">Your word deck</div>
+    <div class="muted">Your study deck</div>
     <div class="deckstat">
       <div><b style="color:var(--acc2)">${deck.length}</b><span class="muted">total</span></div>
       <div><b style="color:var(--warn)">${due.length}</b><span class="muted">due</span></div>
       <div><b style="color:var(--good)">${mastered}</b><span class="muted">learned</span></div>
     </div>
     <div class="row" style="justify-content:center;margin-top:8px">
-      <button class="btn" id="rev" ${due.length?'':'disabled'}>Review ${due.length?`(${due.length})`:'— all done for today'}</button>
-      <button class="btn ghost" id="addMore">+ Add 5 words</button>
+      <button class="btn" id="rev" ${due.length?'':'disabled'}>Review ${due.length?`(${due.length})`:'— all done'}</button>
+      <button class="btn ghost" id="addMore">+ Add 5 random</button>
     </div>
   </div>
-  <h2 style="margin:22px 0 6px;font-family:Sora">New today</h2>
-  <p class="muted" style="margin-bottom:14px">5 fresh words a day. Hit “Review” and drill them like in Anki — the system reminds you at the right moment.</p>
-  <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))" id="todayList">${newToday.map(wordCard).join('')||'<p class="muted">All reviewed for today 💪</p>'}</div>`;
+  <h2 style="margin:22px 0 6px;font-family:Sora">Decks by topic & level</h2>
+  <p class="muted" style="margin-bottom:14px">Pick a theme to study its words as Anki-style flashcards. Spaced repetition reminds you at the right time. 5 fresh words are added daily.</p>
+  <div class="topics">${deckCards}</div>`;
   document.getElementById('rev').onclick=()=>review(dueCards());
   document.getElementById('addMore').onclick=()=>{store.set('lastDaily','');seedDaily();Words();toast('Added 5 words');};
 }
-function wordCard(c){
-  return `<div class="card" style="margin:0">
+function DeckView(id){
+  const d=DECKS.find(x=>x.id===id);if(!d)return Words();
+  const inDeck=new Set(getDeck().map(c=>c.w));
+  const cards=d.words.map(w=>`<div class="card" style="margin:0">
     <div class="row" style="justify-content:space-between">
-      <h3 style="font-size:21px">${esc(c.w)} <button class="btn ghost sm" onclick="speak('${esc(c.w).replace(/'/g,"")}')">🔊</button></h3>
-      <span class="pill">${esc(c.pos||'')}</span></div>
-    <p class="muted" style="margin:2px 0 8px">${esc(c.ipa||'')} · ${esc(c.def||'')}</p>
-    <p style="font-style:italic">«${esc(c.ex||'')}»</p>
-    ${c.syn?`<p class="muted" style="font-size:13px;margin-top:8px">≈ ${esc(c.syn)}</p>`:''}</div>`;
+      <h3 style="font-size:20px">${esc(w.w)} <button class="btn ghost sm" onclick="speak('${esc(w.w).replace(/'/g,"")}')">🔊</button></h3>
+      <span class="pill">${esc(w.pos||'')}</span></div>
+    <p class="muted" style="margin:2px 0 8px">${esc(w.ipa||'')} · ${esc(w.def||'')}</p>
+    <p style="font-style:italic">«${esc(w.ex||'')}»</p>
+    ${w.syn?`<p class="muted" style="font-size:13px;margin-top:8px">≈ ${esc(w.syn)}</p>`:''}
+    ${inDeck.has(w.w)?'<p class="pill ok" style="margin-top:10px;display:inline-block">in study ✓</p>':''}</div>`).join('');
+  app.innerHTML=`
+  <div class="row" style="margin-bottom:14px"><a class="btn ghost sm" href="#/words">← All decks</a></div>
+  <div class="card fade level-badge" style="padding:22px">
+    <div class="lv" style="font-size:36px">${d.icon}</div>
+    <h2>${esc(d.name)}</h2>
+    <p class="muted">${d.words.length} words · level ${d.lvl}</p>
+    <div class="row" style="justify-content:center;margin-top:10px">
+      <button class="btn" id="study">Study this deck</button>
+      <button class="btn ghost" id="addAll">+ Add all to study</button>
+    </div>
+  </div>
+  <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:18px">${cards}</div>`;
+  document.getElementById('addAll').onclick=()=>{let n=0;d.words.forEach(w=>{if(addToDeck({...w,cat:d.id,lvl:d.lvl}))n++;});toast(n?`Added ${n} words`:'Already in study');DeckView(id);};
+  document.getElementById('study').onclick=()=>{
+    d.words.forEach(w=>addToDeck({...w,cat:d.id,lvl:d.lvl}));
+    const set=new Set(d.words.map(w=>w.w));
+    const queue=getDeck().filter(c=>set.has(c.w)).sort((a,b)=>a.due-b.due);
+    review(queue);
+  };
 }
 // SRS-сессия
 function review(queue){
