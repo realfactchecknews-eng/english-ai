@@ -348,7 +348,7 @@ function renderWords(words,today){
         <h3 style="font-size:22px">${esc(w.word)} <button class="btn ghost sm" onclick="speak('${esc(w.word).replace(/'/g,"")}')">🔊</button></h3>
         <span class="pill">${esc(w.pos||'')}</span>
       </div>
-      <p class="muted" style="margin:2px 0 8px">${esc(w.ipa||'')} · ${esc(w.ru||'')}</p>
+      <p class="muted" style="margin:2px 0 8px">${esc(w.ipa||'')} · ${esc(w.def||w.ru||'')}</p>
       <p style="font-style:italic">«${esc(w.example||'')}» <button class="btn ghost sm" onclick="speak('${esc(w.example||'').replace(/'/g,"")}')">🔊</button></p>
       <p class="muted" style="font-size:13px;margin-top:8px">💡 ${esc(w.tip||'')}</p>
       <button class="btn ${learned.has(w.word)?'ghost':''} sm" data-learn="${i}" style="margin-top:12px">${learned.has(w.word)?'✓ в словаре':'+ выучил'}</button>
@@ -362,7 +362,7 @@ function renderWords(words,today){
       <button class="btn ghost" id="wReroll">↻ Новый набор</button></div>`;
   app.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{
     const w=words[+b.dataset.learn];const arr=store.get('learnedWords',[]);
-    if(!arr.find(x=>x.word===w.word)){arr.push({word:w.word,ru:w.ru,date:Date.now()});store.set('learnedWords',arr);}
+    if(!arr.find(x=>x.word===w.word)){arr.push({word:w.word,def:w.def||w.ru,date:Date.now()});store.set('learnedWords',arr);}
     b.className='btn ghost sm';b.textContent='✓ в словаре';toast('Добавлено в словарь');
   });
   document.getElementById('wReroll').onclick=()=>{store.set('wordsCache',{});Words();};
