@@ -32,7 +32,7 @@ const toast = m => {
 const esc = s => (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 // озвучка через браузер (Web Speech API), без внешних API
 function speak(text){
-  if(!('speechSynthesis' in window))return toast('Браузер не умеет озвучку');
+  if(!('speechSynthesis' in window))return toast('Your browser does not support speech');
   speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=.92;
   const v=speechSynthesis.getVoices().find(x=>/en[-_]/i.test(x.lang));if(v)u.voice=v;
@@ -67,17 +67,17 @@ function Home(){
   app.innerHTML = `
   <div class="hero fade">
     <span class="badge">AI English Coach · B1+ → B2 → C1</span>
-    <h1>Подними английский<br>до уверенного уровня</h1>
-    <p>ИИ протестирует тебя, найдёт слабые места и будет давать персональную теорию и упражнения именно по ним. Без воды.</p>
+    <h1>Take your English<br>to a confident level</h1>
+    <p>The AI tests you, finds your weak spots and gives you personal theory and exercises for exactly those. No fluff.</p>
     <div class="row" style="justify-content:center">
-      <a class="btn" href="#/test">${prof?'Пройти тест заново':'Пройти тест уровня'}</a>
-      ${prof?`<a class="btn ghost" href="#/dashboard">Мой прогресс (${prof.level})</a>`:''}
+      <a class="btn" href="#/test">${prof?'Retake the test':'Take the level test'}</a>
+      ${prof?`<a class="btn ghost" href="#/dashboard">My progress (${prof.level})</a>`:''}
     </div>
     <div class="feature-grid">
-      <div class="feat"><div class="ic">🎯</div><h3>Адаптивный тест</h3><p>Вопросы подстраиваются под твои ответы и ставят точный CEFR-уровень.</p></div>
-      <div class="feat"><div class="ic">🩺</div><h3>Карта слабостей</h3><p>Видно проседание по грамматике, временам, предлогам, лексике.</p></div>
-      <div class="feat"><div class="ic">📚</div><h3>Теория под тебя</h3><p>ИИ объясняет правило по-русски с английскими примерами.</p></div>
-      <div class="feat"><div class="ic">✍️</div><h3>Упражнения</h3><p>Тренируешь именно слабую тему, ИИ проверяет и объясняет ошибки.</p></div>
+      <div class="feat"><div class="ic">🎯</div><h3>Adaptive test</h3><p>Questions adjust to your answers and pin down your exact CEFR level.</p></div>
+      <div class="feat"><div class="ic">🩺</div><h3>Weakness map</h3><p>See where you slip — grammar, tenses, prepositions, vocabulary.</p></div>
+      <div class="feat"><div class="ic">📚</div><h3>Theory for you</h3><p>The AI explains the rule clearly with English examples.</p></div>
+      <div class="feat"><div class="ic">✍️</div><h3>Exercises</h3><p>Drill your weak topic; the AI checks and explains your mistakes.</p></div>
     </div>
   </div>`;
 }
@@ -92,7 +92,7 @@ async function TestView(){
 
 async function loadQuestion(){
   if(T.i>=TEST_LEN) return finishTest();
-  app.innerHTML = loader('ИИ подбирает вопрос…');
+  app.innerHTML = loader('The AI is picking a question…');
   const skill = SKILLS[T.i % SKILLS.length];
   let q;
   if(AI.hasRealKey()){
@@ -116,7 +116,7 @@ function renderQuestion(q){
   const opts = q.options.map((o,i)=>`<div class="opt" data-i="${i}">${esc(o)}</div>`).join('');
   app.innerHTML = `
   <div class="card fade">
-    <div class="qhead"><span class="pill">${esc(q.skill)}</span><span class="muted">Вопрос ${T.i+1} / ${TEST_LEN}</span></div>
+    <div class="qhead"><span class="pill">${esc(q.skill)}</span><span class="muted">Question ${T.i+1} / ${TEST_LEN}</span></div>
     <div class="progress"><i style="width:${T.i/TEST_LEN*100}%"></i></div>
     <div class="qtext">${esc(q.question||q.q).replace(/___/g,'<b>______</b>')}</div>
     <div class="opts">${opts}</div>
@@ -137,16 +137,16 @@ function answer(i,q){
   T.history.push({q:q.question||q.q,chosen:q.options[i],correct:q.options[correct],skill:q.skill,ok});
   T.level = Math.max(1,Math.min(6,T.level+(ok?1:-1)));
   if(q.explain) document.getElementById('exp').innerHTML =
-    `<div class="explain"><b>${ok?'Верно ✓':'Разбор:'}</b> ${esc(q.explain)}</div>`;
+    `<div class="explain"><b>${ok?'Correct ✓':'Explanation:'}</b> ${esc(q.explain)}</div>`;
   const btn=document.createElement('button');
   btn.className='btn';btn.style.marginTop='18px';
-  btn.textContent = T.i+1>=TEST_LEN?'Узнать результат →':'Дальше →';
+  btn.textContent = T.i+1>=TEST_LEN?'See result →':'Next →';
   btn.onclick=()=>{T.i++;loadQuestion();};
   app.querySelector('.card').appendChild(btn);
 }
 
 async function finishTest(){
-  app.innerHTML = loader('ИИ анализирует ответы и определяет уровень…');
+  app.innerHTML = loader('The AI is analysing your answers and grading your level…');
   let result;
   if(AI.hasRealKey()){
     try{ result = await AI.assess(T.history); }catch(e){ result = offlineAssess(); }
@@ -166,15 +166,15 @@ function offlineAssess(){
   const score=T.history.filter(h=>h.ok).length/T.history.length;
   const level=score>0.8?'C1':score>0.6?'B2':score>0.4?'B1+':'B1';
   const weak=skills.filter(s=>s.pct<70).map(s=>s.name);
-  return {level,summary:`Ты ответил правильно на ${Math.round(score*100)}% вопросов. Оценка по офлайн-режиму — подключи Groq-ключ для точного ИИ-анализа.`,
-    skills,weak:weak.length?weak:['Use of English'],advice:'Сфокусируйся на слабых темах в разделе «Прокачка».'};
+  return {level,summary:`You answered ${Math.round(score*100)}% of the questions correctly. This is an offline estimate — connect the AI for a precise analysis.`,
+    skills,weak:weak.length?weak:['Use of English'],advice:'Focus on your weak topics in the Practice section.'};
 }
 
 /* ---------- Dashboard ---------- */
 function Dashboard(){
   const p = store.get('profile',null);
   if(!p){
-    app.innerHTML=`<div class="card fade"><div class="empty"><div class="ic">🧭</div><h2>Пока нет данных</h2><p class="muted">Пройди тест уровня, чтобы увидеть карту своих сильных и слабых сторон.</p><a class="btn" style="margin-top:18px" href="#/test">Пройти тест</a></div></div>`;return;
+    app.innerHTML=`<div class="card fade"><div class="empty"><div class="ic">🧭</div><h2>No data yet</h2><p class="muted">Take the level test to see the map of your strengths and weaknesses.</p><a class="btn" style="margin-top:18px" href="#/test">Take the test</a></div></div>`;return;
   }
   const skills=(p.skills||[]).map(s=>{
     const w=s.pct<70;
@@ -184,20 +184,20 @@ function Dashboard(){
       <span class="pct">${s.pct}%</span></div>`;
   }).join('');
   const weak=(p.weak||[]).map(t=>`<a class="topic" href="#/lesson?t=${encodeURIComponent(t)}">
-    <span class="tag weak">слабое место</span><h3>${esc(t)}</h3><p>Теория + упражнения от ИИ →</p></a>`).join('');
+    <span class="tag weak">weak spot</span><h3>${esc(t)}</h3><p>Theory + exercises from the AI →</p></a>`).join('');
   app.innerHTML=`
   <div class="card fade level-badge">
-    <div class="muted">Твой уровень</div>
+    <div class="muted">Your level</div>
     <div class="lv">${esc(p.level)}</div>
     <p class="muted" style="max-width:520px;margin:8px auto 0">${esc(p.summary||'')}</p>
   </div>
-  <div class="card fade"><h2 style="margin-bottom:16px">Карта навыков</h2><div class="skills">${skills}</div></div>
-  <div class="card fade"><h2 style="margin-bottom:6px">Что качать в первую очередь</h2>
+  <div class="card fade"><h2 style="margin-bottom:16px">Skills map</h2><div class="skills">${skills}</div></div>
+  <div class="card fade"><h2 style="margin-bottom:6px">What to work on first</h2>
     <p class="muted" style="margin-bottom:14px">${esc(p.advice||'')}</p>
-    <div class="topics">${weak||'<p class="muted">Слабых тем не найдено — отличная работа!</p>'}</div></div>
+    <div class="topics">${weak||'<p class="muted">No weak topics found — great work!</p>'}</div></div>
   <div class="row" style="margin-top:18px;justify-content:center">
-    <a class="btn ghost" href="#/practice">Все темы для прокачки</a>
-    <a class="btn ghost" href="#/test">Пройти тест заново</a>
+    <a class="btn ghost" href="#/practice">All practice topics</a>
+    <a class="btn ghost" href="#/test">Retake the test</a>
   </div>`;
 }
 
@@ -209,11 +209,11 @@ function Practice(){
   const cards=allTopics.map(t=>{
     const w=weak.has(t);
     return `<a class="topic" href="#/lesson?t=${encodeURIComponent(t)}">
-      <span class="tag ${w?'weak':'ok'}">${w?'твоё слабое':'тренировка'}</span>
-      <h3>${esc(t)}</h3><p>Теория + 5 упражнений →</p></a>`;
+      <span class="tag ${w?'weak':'ok'}">${w?'your weak spot':'practice'}</span>
+      <h3>${esc(t)}</h3><p>Theory + 5 exercises →</p></a>`;
   }).join('');
-  app.innerHTML=`<div class="card fade"><h2 style="margin-bottom:6px">Прокачка по темам</h2>
-    <p class="muted" style="margin-bottom:16px">Выбери тему — ИИ объяснит правило и даст упражнения с проверкой.</p>
+  app.innerHTML=`<div class="card fade"><h2 style="margin-bottom:6px">Practice by topic</h2>
+    <p class="muted" style="margin-bottom:16px">Pick a topic — the AI explains the rule and gives exercises with feedback.</p>
     <div class="topics">${cards}</div></div>`;
 }
 
@@ -221,7 +221,7 @@ function Practice(){
 async function Lesson(topic){
   topic=topic||'Tenses';
   const lvl=store.get('profile',{}).level||'B2';
-  app.innerHTML=loader('ИИ готовит урок по теме «'+esc(topic)+'»…');
+  app.innerHTML=loader('The AI is preparing a lesson on "'+esc(topic)+'"…');
   let th,ex;
   if(AI.hasRealKey()){
     try{ [th,ex]=await Promise.all([AI.theory(topic,lvl),AI.exercises(topic,lvl,5)]); }
@@ -229,14 +229,14 @@ async function Lesson(topic){
   } else { th=offTheory(topic); ex={items:BANK.exercises._generic}; }
   renderLesson(topic,th,ex.items||[]);
 }
-function offTheory(t){return BANK.theory[t]||{title:t,html:'<p>Подключи Groq-ключ (⚙), чтобы ИИ сгенерировал теорию по этой теме. Пока доступны базовые упражнения ниже.</p>'};}
+function offTheory(t){return BANK.theory[t]||{title:t,html:'<p>Connect the AI (⚙) so it can generate theory for this topic. For now, basic exercises are available below.</p>'};}
 
 function renderLesson(topic,th,items){
   const ex=items.map((it,idx)=>{
     if(it.type==='fill'){
       return `<div class="card ex-item" data-idx="${idx}" data-type="fill">
         <div class="qtext" style="font-size:16px">${esc(it.q).replace(/___/g,'<b>______</b>')}</div>
-        <div class="fillrow"><input placeholder="твой ответ" data-input><button class="btn sm" data-check>Проверить</button></div>
+        <div class="fillrow"><input placeholder="your answer" data-input><button class="btn sm" data-check>Check</button></div>
         <div data-res></div></div>`;
     }
     const opts=(it.options||[]).map((o,i)=>`<div class="opt" data-i="${i}">${esc(o)}</div>`).join('');
@@ -245,11 +245,11 @@ function renderLesson(topic,th,items){
       <div class="opts">${opts}</div><div data-res></div></div>`;
   }).join('');
   app.innerHTML=`
-  <div class="row" style="margin-bottom:16px"><a class="btn ghost sm" href="#/dashboard">← Назад</a>
-    <a class="btn ghost sm" href="#/lesson?t=${encodeURIComponent(topic)}" onclick="location.reload&&0">↻ Новые упражнения</a></div>
+  <div class="row" style="margin-bottom:16px"><a class="btn ghost sm" href="#/dashboard">← Back</a>
+    <a class="btn ghost sm" href="#/lesson?t=${encodeURIComponent(topic)}" onclick="location.reload&&0">↻ New exercises</a></div>
   <div class="card fade theory"><h2>${esc(th.title||topic)}</h2>${th.html||''}</div>
-  <h2 style="margin:24px 0 4px;font-family:Sora">Упражнения</h2>
-  <p class="muted" style="margin-bottom:14px">Реши и проверь — ИИ объяснит каждый ответ.</p>
+  <h2 style="margin:24px 0 4px;font-family:Sora">Exercises</h2>
+  <p class="muted" style="margin-bottom:14px">Solve and check — the AI explains every answer.</p>
   ${ex}`;
   // bind
   app.querySelectorAll('.ex-item').forEach(card=>{
@@ -259,14 +259,14 @@ function renderLesson(topic,th,items){
         const i=+el.dataset.i,ok=i===it.answer;
         card.querySelectorAll('.opt').forEach((o,idx)=>{o.style.pointerEvents='none';
           if(idx===it.answer)o.classList.add('correct');else if(idx===i)o.classList.add('wrong');else o.classList.add('dim');});
-        card.querySelector('[data-res]').innerHTML=`<div class="explain"><b>${ok?'Верно ✓':'Разбор:'}</b> ${esc(it.explain||'')}</div>`;
+        card.querySelector('[data-res]').innerHTML=`<div class="explain"><b>${ok?'Correct ✓':'Explanation:'}</b> ${esc(it.explain||'')}</div>`;
       });
     } else {
       const input=card.querySelector('[data-input]');
       const go=()=>{
         const ok=AI.checkFill(input.value,it);
         input.style.borderColor=ok?'var(--good)':'var(--bad)';
-        card.querySelector('[data-res]').innerHTML=`<div class="explain"><b>${ok?'Верно ✓':'Правильно: '+esc(it.answer)}</b> ${esc(it.explain||'')}</div>`;
+        card.querySelector('[data-res]').innerHTML=`<div class="explain"><b>${ok?'Correct ✓':'Answer: '+esc(it.answer)}</b> ${esc(it.explain||'')}</div>`;
       };
       card.querySelector('[data-check]').onclick=go;
       input.addEventListener('keydown',e=>{if(e.key==='Enter')go();});
@@ -288,28 +288,28 @@ function Writing(){
   const histHtml=hist.slice().reverse().slice(0,15).map((h,i)=>`
     <div class="topic" data-h="${hist.length-1-i}" style="cursor:pointer">
       <span class="tag ${h.score>=73?'ok':'weak'}">${esc(h.band||'')} · ${h.score||0}/100</span>
-      <p class="muted" style="font-size:12px">${new Date(h.date).toLocaleDateString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
+      <p class="muted" style="font-size:12px">${new Date(h.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
       <p style="font-size:13px;margin-top:4px">${esc((h.task||'').slice(0,70))}…</p></div>`).join('')
-    ||'<p class="muted">Пока нет проверок. Напиши первое эссе!</p>';
+    ||'<p class="muted">No checks yet. Write your first essay!</p>';
   app.innerHTML=`
   <div class="tabs">
-    <div class="tab active" data-tab="new">Новое письмо</div>
-    <div class="tab" data-tab="hist">История (${hist.length})</div>
+    <div class="tab active" data-tab="new">New writing</div>
+    <div class="tab" data-tab="hist">History (${hist.length})</div>
   </div>
   <div id="wnewWrap" class="card fade">
-    <h2 style="margin-bottom:6px">Письмо · подробная проверка</h2>
-    <p class="muted" style="margin-bottom:14px">Выбери готовую тему или впиши свою. Mr. Fluent разберёт по критериям, исправит и оценит честно.</p>
+    <h2 style="margin-bottom:6px">Writing · detailed feedback</h2>
+    <p class="muted" style="margin-bottom:14px">Pick a ready-made topic or type your own. Fluent breaks it down by criteria, fixes it and grades you honestly.</p>
     <div class="row" style="margin-bottom:10px">
-      <input id="wtopic" placeholder="Своя тема (необязательно)…" style="flex:1;min-width:220px;padding:12px 15px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:14px">
+      <input id="wtopic" placeholder="Your own topic (optional)…" style="flex:1;min-width:220px;padding:12px 15px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:14px">
     </div>
-    <div class="explain" style="margin-bottom:14px"><b>Задание:</b> <span id="wtask">${esc(task)}</span>
-      <button class="btn ghost sm" id="wnew" style="margin-left:8px">↻ другое</button></div>
-    <textarea id="wtext" placeholder="Пиши свой ответ на английском здесь…" style="width:100%;min-height:220px;padding:15px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:15px;font-family:Inter;line-height:1.6;resize:vertical"></textarea>
-    <div class="row" style="margin-top:14px"><button class="btn" id="wcheck">Проверить ✍️</button>
-      <span class="muted" id="wcount">0 слов</span></div>
+    <div class="explain" style="margin-bottom:14px"><b>Task:</b> <span id="wtask">${esc(task)}</span>
+      <button class="btn ghost sm" id="wnew" style="margin-left:8px">↻ another</button></div>
+    <textarea id="wtext" placeholder="Write your answer in English here…" style="width:100%;min-height:220px;padding:15px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:15px;font-family:Inter;line-height:1.6;resize:vertical"></textarea>
+    <div class="row" style="margin-top:14px"><button class="btn" id="wcheck">Check ✍️</button>
+      <span class="muted" id="wcount">0 words</span></div>
     <div id="wres" style="margin-top:18px"></div>
   </div>
-  <div id="whistWrap" class="card fade" style="display:none"><h2 style="margin-bottom:14px">История проверок</h2>
+  <div id="whistWrap" class="card fade" style="display:none"><h2 style="margin-bottom:14px">Check history</h2>
     <div class="topics">${histHtml}</div></div>`;
   // tabs
   app.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
@@ -323,13 +323,13 @@ function Writing(){
   const ta=document.getElementById('wtext');
   const topic=document.getElementById('wtopic');
   topic.oninput=()=>{if(topic.value.trim())document.getElementById('wtask').textContent=topic.value.trim();};
-  ta.oninput=()=>document.getElementById('wcount').textContent=(ta.value.trim().match(/\S+/g)||[]).length+' слов';
+  ta.oninput=()=>document.getElementById('wcount').textContent=(ta.value.trim().match(/\S+/g)||[]).length+' words';
   document.getElementById('wnew').onclick=()=>{if(!topic.value.trim())Writing();};
   document.getElementById('wcheck').onclick=async()=>{
     const text=ta.value.trim();
-    if((text.match(/\S+/g)||[]).length<15)return toast('Напиши хотя бы пару предложений');
-    const res=document.getElementById('wres');res.innerHTML=loader('Mr. Fluent внимательно читает твоё письмо…');
-    if(!AI.hasRealKey()){res.innerHTML='<div class="explain">Проверка письма работает только с подключённым ИИ (воркер).</div>';return;}
+    if((text.match(/\S+/g)||[]).length<15)return toast('Write at least a couple of sentences');
+    const res=document.getElementById('wres');res.innerHTML=loader('Fluent is reading your writing carefully…');
+    if(!AI.hasRealKey()){res.innerHTML='<div class="explain">Writing feedback only works with the AI connected (worker).</div>';return;}
     const tk=document.getElementById('wtask').textContent;
     try{
       const r=await AI.writingCheck(tk,text);
@@ -337,7 +337,7 @@ function Writing(){
       const log=store.get('writing',[]);
       log.push({date:Date.now(),score:r.score,band:r.band,task:tk,full:r});
       store.set('writing',log.slice(-40));
-    }catch(e){res.innerHTML='<div class="explain"><b>Ошибка:</b> '+esc(e.message)+'</div>';}
+    }catch(e){res.innerHTML='<div class="explain"><b>Error:</b> '+esc(e.message)+'</div>';}
   };
 }
 function showWritingResult(r,modal){
@@ -401,22 +401,22 @@ function Words(){
   const mastered=deck.filter(c=>c.interval>=21).length;
   app.innerHTML=`
   <div class="card fade level-badge" style="padding:24px">
-    <div class="muted">Твоя колода слов</div>
+    <div class="muted">Your word deck</div>
     <div class="deckstat">
-      <div><b style="color:var(--acc2)">${deck.length}</b><span class="muted">всего</span></div>
-      <div><b style="color:var(--warn)">${due.length}</b><span class="muted">к повтору</span></div>
-      <div><b style="color:var(--good)">${mastered}</b><span class="muted">выучено</span></div>
+      <div><b style="color:var(--acc2)">${deck.length}</b><span class="muted">total</span></div>
+      <div><b style="color:var(--warn)">${due.length}</b><span class="muted">due</span></div>
+      <div><b style="color:var(--good)">${mastered}</b><span class="muted">learned</span></div>
     </div>
     <div class="row" style="justify-content:center;margin-top:8px">
-      <button class="btn" id="rev" ${due.length?'':'disabled'}>Повторить ${due.length?`(${due.length})`:'— всё на сегодня'}</button>
-      <button class="btn ghost" id="addMore">+ Добавить 5 слов</button>
+      <button class="btn" id="rev" ${due.length?'':'disabled'}>Review ${due.length?`(${due.length})`:'— all done for today'}</button>
+      <button class="btn ghost" id="addMore">+ Add 5 words</button>
     </div>
   </div>
-  <h2 style="margin:22px 0 6px;font-family:Sora">Новые сегодня</h2>
-  <p class="muted" style="margin-bottom:14px">5 свежих слов в день. Жми «Повторить» и зубри как в Anki — система сама напомнит их в нужный момент.</p>
-  <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))" id="todayList">${newToday.map(wordCard).join('')||'<p class="muted">Сегодня всё повторено 💪</p>'}</div>`;
+  <h2 style="margin:22px 0 6px;font-family:Sora">New today</h2>
+  <p class="muted" style="margin-bottom:14px">5 fresh words a day. Hit “Review” and drill them like in Anki — the system reminds you at the right moment.</p>
+  <div class="topics" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))" id="todayList">${newToday.map(wordCard).join('')||'<p class="muted">All reviewed for today 💪</p>'}</div>`;
   document.getElementById('rev').onclick=()=>review(dueCards());
-  document.getElementById('addMore').onclick=()=>{store.set('lastDaily','');seedDaily();Words();toast('Добавлено 5 слов');};
+  document.getElementById('addMore').onclick=()=>{store.set('lastDaily','');seedDaily();Words();toast('Added 5 words');};
 }
 function wordCard(c){
   return `<div class="card" style="margin:0">
@@ -429,20 +429,20 @@ function wordCard(c){
 }
 // SRS-сессия
 function review(queue){
-  if(!queue.length){toast('Нечего повторять');return Words();}
+  if(!queue.length){toast('Nothing to review');return Words();}
   let idx=0;
   const show=()=>{
-    if(idx>=queue.length){app.innerHTML=`<div class="card fade"><div class="empty"><div class="ic">🎉</div><h2>Сессия закончена!</h2><p class="muted">Повторено ${queue.length} слов. Возвращайся завтра.</p><a class="btn" style="margin-top:16px" href="#/words">К колоде</a></div></div>`;return;}
+    if(idx>=queue.length){app.innerHTML=`<div class="card fade"><div class="empty"><div class="ic">🎉</div><h2>Session complete!</h2><p class="muted">Reviewed ${queue.length} words. Come back tomorrow.</p><a class="btn" style="margin-top:16px" href="#/words">Back to deck</a></div></div>`;return;}
     const c=queue[idx];
     app.innerHTML=`
     <div class="row" style="justify-content:space-between;margin-bottom:14px">
-      <a class="btn ghost sm" href="#/words">← Выход</a><span class="muted">${idx+1} / ${queue.length}</span></div>
+      <a class="btn ghost sm" href="#/words">← Exit</a><span class="muted">${idx+1} / ${queue.length}</span></div>
     <div class="flash" id="flash">
       <div class="flash-inner">
         <div class="flash-face">
           <div class="wd">${esc(c.w)}</div><div class="ipa">${esc(c.ipa||'')}</div>
           <button class="btn ghost sm" onclick="event.stopPropagation();speak('${esc(c.w).replace(/'/g,"")}')">🔊</button>
-          <p class="muted" style="margin-top:14px">Нажми, чтобы увидеть значение</p>
+          <p class="muted" style="margin-top:14px">Tap to reveal the meaning</p>
         </div>
         <div class="flash-face flash-back">
           <span class="pill">${esc(c.pos||'')}</span>
@@ -486,16 +486,16 @@ const CHAT_MAX=24; // сколько последних реплик помни�
 function Chat(){
   const log=store.get('chatLog',[]);
   const bubbles=log.map(m=>chatBubble(m)).join('') ||
-    `<div class="muted" style="text-align:center;padding:30px">Спроси что угодно про английский: «объясни Present Perfect», «дай 5 упражнений на артикли», «проверь предложение …», «в чём разница between/among».</div>`;
+    `<div class="muted" style="text-align:center;padding:30px">Ask anything about English: "explain Present Perfect", "give me 5 exercises on articles", "check this sentence …", "what's the difference between/among".</div>`;
   app.innerHTML=`
   <div class="card fade" style="display:flex;flex-direction:column;height:calc(100vh - 170px);min-height:420px">
     <div class="row" style="justify-content:space-between;margin-bottom:12px">
-      <h2 style="font-size:20px">Чат с Mr. Fluent</h2>
-      <button class="btn ghost sm" id="chatClear">Очистить</button>
+      <h2 style="font-size:20px">Chat with Fluent</h2>
+      <button class="btn ghost sm" id="chatClear">Clear</button>
     </div>
     <div id="chatBox" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px">${bubbles}</div>
     <div class="fillrow" style="margin-top:14px">
-      <input id="chatIn" placeholder="Напиши сообщение…" autocomplete="off">
+      <input id="chatIn" placeholder="Type a message…" autocomplete="off">
       <button class="btn" id="chatSend">→</button>
     </div>
   </div>`;
@@ -504,13 +504,13 @@ function Chat(){
   document.getElementById('chatClear').onclick=()=>{store.set('chatLog',[]);Chat();};
   const send=async()=>{
     const text=input.value.trim();if(!text)return;
-    if(!AI.hasRealKey()){toast('Чат работает с подключённым ИИ');return;}
+    if(!AI.hasRealKey()){toast('Chat works with the AI connected');return;}
     const log=store.get('chatLog',[]);
     log.push({role:'user',content:text});store.set('chatLog',log);
     input.value='';
     box.insertAdjacentHTML('beforeend',chatBubble({role:'user',content:text}));
     const tid='t'+Date.now();
-    box.insertAdjacentHTML('beforeend',`<div id="${tid}" class="opt" style="align-self:flex-start;max-width:80%;cursor:default"><span class="muted">Mr. Fluent печатает…</span></div>`);
+    box.insertAdjacentHTML('beforeend',`<div id="${tid}" class="opt" style="align-self:flex-start;max-width:80%;cursor:default"><span class="muted">Fluent is typing…</span></div>`);
     box.scrollTop=box.scrollHeight;
     try{
       const msgs=[{role:'system',content:AI.PERSONA_CHAT()},...log.slice(-CHAT_MAX)];
@@ -538,21 +538,21 @@ function chatBubble(m){
 const THEORY_TOPICS=["Tenses","Conditionals","Articles","Modal verbs","Reported speech","Passive voice","Prepositions","Phrasal verbs","Use of English","Grammar","Vocabulary","Gerunds & Infinitives","Relative clauses","Comparatives & Superlatives","Word order & Inversion","Future forms"];
 function Theory(){
   const cards=THEORY_TOPICS.map(t=>`<a class="topic" href="#/theory-read?t=${encodeURIComponent(t)}">
-    <span class="tag ok">теория</span><h3>${esc(t)}</h3><p>Правила + примеры →</p></a>`).join('');
-  app.innerHTML=`<div class="card fade"><h2 style="margin-bottom:6px">Теория · справочник грамматики</h2>
-    <p class="muted" style="margin-bottom:16px">Чистая теория с примерами. ИИ объяснит любую тему; в конце — кнопка перейти к упражнениям.</p>
+    <span class="tag ok">theory</span><h3>${esc(t)}</h3><p>Rules + examples →</p></a>`).join('');
+  app.innerHTML=`<div class="card fade"><h2 style="margin-bottom:6px">Theory · grammar reference</h2>
+    <p class="muted" style="margin-bottom:16px">Pure theory with examples. The AI explains any topic; at the end there's a button to jump to exercises.</p>
     <div class="topics">${cards}</div></div>`;
 }
 async function TheoryRead(topic){
   topic=topic||'Tenses';
   const lvl=store.get('profile',{}).level||'B2';
-  app.innerHTML=loader('Готовлю теорию по теме «'+esc(topic)+'»…');
+  app.innerHTML=loader('Preparing theory on "'+esc(topic)+'"…');
   let th;
   if(AI.hasRealKey()){try{th=await AI.theory(topic,lvl);}catch(e){th=offTheory(topic);}}
   else th=offTheory(topic);
   app.innerHTML=`
-  <div class="row" style="margin-bottom:16px"><a class="btn ghost sm" href="#/theory">← Все темы</a>
-    <a class="btn ghost sm" href="#/lesson?t=${encodeURIComponent(topic)}">К упражнениям →</a></div>
+  <div class="row" style="margin-bottom:16px"><a class="btn ghost sm" href="#/theory">← All topics</a>
+    <a class="btn ghost sm" href="#/lesson?t=${encodeURIComponent(topic)}">To exercises →</a></div>
   <div class="card fade theory"><h2>${esc(th.title||topic)}</h2>${th.html||''}</div>`;
 }
 
@@ -588,12 +588,12 @@ function renderLookup(d){
     <p style="margin:8px 0 4px">${esc(d.def||'')}</p>
     ${d.example?`<p class="muted" style="font-style:italic">«${esc(d.example)}»</p>`:''}
     ${syn}${ant}
-    <button class="btn sm" style="margin-top:10px" onclick="addLookupToDeck('${esc((d.word||'').replace(/'/g,''))}')">+ в колоду</button>`;
+    <button class="btn sm" style="margin-top:10px" onclick="addLookupToDeck('${esc((d.word||'').replace(/'/g,''))}')">+ to deck</button>`;
 }
 function addLookupToDeck(word){
   const d=lookupCache[word.toLowerCase()];if(!d)return;
   const ok=addToDeck({w:d.word,ipa:d.ipa,pos:d.pos,def:d.def,ex:d.example,syn:(d.syn||[]).join(', ')});
-  toast(ok?'Добавлено в колоду ✓':'Уже в колоде');hideLookup();
+  toast(ok?'Added to deck ✓':'Already in deck');hideLookup();
 }
 window.addLookupToDeck=addLookupToDeck;
 
@@ -604,32 +604,32 @@ km.onclick=e=>{if(e.target===km)km.classList.add('hidden');};
 document.getElementById('keySave').onclick=()=>{
   const v=document.getElementById('keyInput').value.trim();
   if(v)localStorage.setItem('aiProxy',v);else localStorage.removeItem('aiProxy');
-  km.classList.add('hidden');toast(v?'Воркер сохранён ✓':'Сброшено к вшитому');
+  km.classList.add('hidden');toast(v?'Worker saved ✓':'Reset to built-in');
 };
-document.getElementById('keyDefault').onclick=()=>{localStorage.removeItem('aiProxy');km.classList.add('hidden');toast('Используется вшитый воркер');};
+document.getElementById('keyDefault').onclick=()=>{localStorage.removeItem('aiProxy');km.classList.add('hidden');toast('Using the built-in worker');};
 
 /* ---- sync UI ---- */
-const syncState=()=>{const c=localStorage.getItem('syncCode');document.getElementById('syncState').textContent=c?('Включена, код: '+c):'Выключена.';document.getElementById('syncInput').value=c||'';};
+const syncState=()=>{const c=localStorage.getItem('syncCode');document.getElementById('syncState').textContent=c?('On, code: '+c):'Off.';document.getElementById('syncInput').value=c||'';};
 document.getElementById('keyBtn').addEventListener('click',syncState);
 document.getElementById('syncOn').onclick=async()=>{
   const code=document.getElementById('syncInput').value.trim().toLowerCase();
-  if(code.length<4)return toast('Код минимум 4 символа');
-  if(!AI.hasRealKey())return toast('Нужен подключённый воркер');
+  if(code.length<4)return toast('Code must be at least 4 characters');
+  if(!AI.hasRealKey())return toast('A connected worker is required');
   try{
     const had=await pullState(code);
     localStorage.setItem('syncCode',code);
-    if(had){toast('Прогресс загружен ✓');setTimeout(()=>location.reload(),600);}
-    else{await pushState();toast('Синхронизация включена ✓');}
+    if(had){toast('Progress loaded ✓');setTimeout(()=>location.reload(),600);}
+    else{await pushState();toast('Sync enabled ✓');}
     syncState();
-  }catch(e){toast('Ошибка: '+e.message);}
+  }catch(e){toast('Error: '+e.message);}
 };
 document.getElementById('syncPush').onclick=async()=>{
   const code=localStorage.getItem('syncCode')||document.getElementById('syncInput').value.trim().toLowerCase();
-  if(code.length<4)return toast('Сначала включи синхронизацию');
+  if(code.length<4)return toast('Enable sync first');
   localStorage.setItem('syncCode',code);
-  try{await pushState();toast('Выгружено ✓');}catch(e){toast('Ошибка: '+e.message);}
+  try{await pushState();toast('Uploaded ✓');}catch(e){toast('Error: '+e.message);}
 };
-document.getElementById('syncOff').onclick=()=>{localStorage.removeItem('syncCode');syncState();toast('Синхронизация выключена');};
+document.getElementById('syncOff').onclick=()=>{localStorage.removeItem('syncCode');syncState();toast('Sync disabled');};
 
 /* ---------- bg particles ---------- */
 (function(){
