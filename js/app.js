@@ -413,16 +413,23 @@ function seedDaily(){
 }
 function dueCards(){const n=Date.now();return getDeck().filter(c=>c.due<=n);}
 function inStudy(cat){const s=new Set(getDeck().map(c=>c.w));return DECKS.find(d=>d.id===cat).words.filter(w=>s.has(w.w)).length;}
+function deckProgress(d){
+  const learned=new Map(getDeck().map(c=>[c.w,c.interval]));
+  const done=d.words.filter(w=>(learned.get(w.w)||0)>=21).length;
+  return Math.round(done/d.words.length*100);
+}
 function Words(){
   seedDaily();
   const deck=getDeck();const due=dueCards();
   const mastered=deck.filter(c=>c.interval>=21).length;
   const deckCards=DECKS.map(d=>{
-    const have=inStudy(d.id);
+    const have=inStudy(d.id);const pct=deckProgress(d);
     return `<a class="topic" href="#/deck?id=${d.id}">
       <span class="tag ${d.lvl==='C1'?'weak':'ok'}">${d.lvl}</span>
       <h3>${d.icon} ${esc(d.name)}</h3>
-      <p class="muted" style="font-size:13px">${d.words.length} words · ${have} in study</p></a>`;
+      <p class="muted" style="font-size:13px;margin-bottom:8px">${d.words.length} words · ${have} in study</p>
+      <div class="bar"><i style="width:${pct}%;background:linear-gradient(90deg,var(--acc),var(--acc2))"></i></div>
+      <p class="muted" style="font-size:12px;margin-top:5px">${pct}% mastered</p></a>`;
   }).join('');
   app.innerHTML=`
   <div class="card fade level-badge" style="padding:24px">
@@ -459,8 +466,9 @@ function DeckView(id){
   <div class="card fade level-badge" style="padding:22px">
     <div class="lv" style="font-size:36px">${d.icon}</div>
     <h2>${esc(d.name)}</h2>
-    <p class="muted">${d.words.length} words · level ${d.lvl}</p>
-    <div class="row" style="justify-content:center;margin-top:10px">
+    <p class="muted">${d.words.length} words · level ${d.lvl} · ${deckProgress(d)}% mastered</p>
+    <div class="bar" style="max-width:320px;margin:10px auto 0"><i style="width:${deckProgress(d)}%;background:linear-gradient(90deg,var(--acc),var(--acc2))"></i></div>
+    <div class="row" style="justify-content:center;margin-top:14px">
       <button class="btn" id="study">Study this deck</button>
       <button class="btn ghost" id="addAll">+ Add all to study</button>
     </div>
