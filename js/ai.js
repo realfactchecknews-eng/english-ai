@@ -110,6 +110,12 @@ List every real error from the ORIGINAL, but keep numbers consistent with the ba
     return chat(sys, `Task: ${task || 'free writing'}\n\nStudent's text:\n${text}`, {temp: 0.2});
   }
 
+  // ----- Аудирование: текст + вопросы -----
+  async function listening(lvl, topic) {
+    const sys = PERSONA() + `Create a listening-comprehension task at CEFR ${lvl}. Write a natural spoken-style passage of 110-150 words${topic ? ' about: ' + topic : ' on an everyday or general-interest topic'}, then 4 multiple-choice questions testing understanding (gist + detail + inference + vocabulary-in-context). Return strict JSON: {"title":"short title","text":"the passage","questions":[{"q":"...","options":["a","b","c","d"],"answer":0,"explain":"short, in English"}]}`;
+    return chat(sys, 'Generate the listening task now.', {temp: 0.8});
+  }
+
   // ----- Быстрый словарь: клик по слову -----
   async function lookup(word, context) {
     const sys = `You are an English dictionary. For the given word/phrase, reply in ENGLISH ONLY (no other language). Return strict JSON: {"word":"...","ipa":"/.../","pos":"part of speech","def":"clear simple definition","example":"a natural example sentence","syn":["synonym","synonym"],"ant":["antonym"]}. If a context sentence is given, define the sense used there.`;
@@ -131,5 +137,5 @@ List every real error from the ORIGINAL, but keep numbers consistent with the ba
 
   const PERSONA_CHAT = () => PERSONA() + 'You are now in free chat mode. Answer the student\'s questions, explain grammar/vocabulary topics clearly in English, and when asked — give exercises and check answers strictly. Keep replies focused and not too long. Use simple Markdown.';
 
-  return {chat, chatTurns, PERSONA_CHAT, syncSave, syncLoad, nextQuestion, assess, theory, exercises, writingCheck, dailyWords, lookup, checkFill, hasRealKey, level, base};
+  return {chat, chatTurns, PERSONA_CHAT, syncSave, syncLoad, nextQuestion, assess, theory, exercises, writingCheck, dailyWords, listening, lookup, checkFill, hasRealKey, level, base};
 })();

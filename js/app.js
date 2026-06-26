@@ -3,7 +3,19 @@ const app = document.getElementById('app');
 const SKILLS = ["Tenses","Prepositions","Use of English","Grammar","Vocabulary","Reading"];
 const TEST_LEN = 10;
 
-const SYNC_KEYS=['profile','attempts','writing','learnedWords','wordsCache','chatLog','deck','lastDaily'];
+const SYNC_KEYS=['profile','attempts','writing','learnedWords','wordsCache','chatLog','deck','lastDaily','streak','streakDate','streakBest'];
+/* ---- Streak (дни подряд) ---- */
+function updateStreak(){
+  const today=new Date().toISOString().slice(0,10);
+  const last=store.get('streakDate','');
+  if(last===today)return;
+  const y=new Date(Date.now()-86400000).toISOString().slice(0,10);
+  let s=store.get('streak',0);
+  s = last===y ? s+1 : 1;
+  store.set('streak',s);store.set('streakDate',today);
+  store.set('streakBest',Math.max(s,store.get('streakBest',0)));
+}
+function streakInfo(){return {cur:store.get('streak',0),best:store.get('streakBest',0)};}
 const store = {
   get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},
   set:(k,v)=>{localStorage.setItem(k,JSON.stringify(v));if(SYNC_KEYS.includes(k))schedulePush();},
@@ -31,11 +43,27 @@ const toast = m => {
 };
 const esc = s => (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 // озвучка через браузер (Web Speech API), без внешних API
+let _voices=[];
+function loadVoices(){_voices=speechSynthesis.getVoices()||[];}
+if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
+function pickVoice(){
+  if(!_voices.length)loadVoices();
+  const en=_voices.filter(v=>/^en[-_]/i.test(v.lang));
+  if(!en.length)return null;
+  // приоритет — самые натуральные голоса в популярных ОС/браузерах
+  const pref=['Google US English','Google UK English Female','Google UK English Male',
+    'Samantha','Microsoft Aria Online (Natural)','Microsoft Jenny Online (Natural)',
+    'Microsoft Guy Online (Natural)','Aria','Jenny','Karen','Daniel','Moira','Serena','Alex'];
+  for(const name of pref){const m=en.find(v=>v.name===name||v.name.includes(name));if(m)return m;}
+  // иначе берём не-локальный (обычно качественнее) или первый en-US
+  return en.find(v=>!v.localService)||en.find(v=>/en[-_]US/i.test(v.lang))||en[0];
+}
 function speak(text){
   if(!('speechSynthesis' in window))return toast('Your browser does not support speech');
   speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=.92;
-  const v=speechSynthesis.getVoices().find(x=>/en[-_]/i.test(x.lang));if(v)u.voice=v;
+  const u=new SpeechSynthesisUtterance(text);
+  const v=pickVoice();if(v){u.voice=v;u.lang=v.lang;}else u.lang='en-US';
+  u.rate=.95;u.pitch=1;u.volume=1;
   speechSynthesis.speak(u);
 }
 window.speak=speak;
@@ -58,6 +86,7 @@ function router(){
   if(path==='/theory') return Theory();
   if(path==='/theory-read') return TheoryRead(params.get('t'));
   if(path==='/deck') return DeckView(params.get('id'));
+  if(path==='/listen') return Listening();
   Home();
 }
 window.addEventListener('hashchange',router);
@@ -73,9 +102,10 @@ function todaysTopic(){
 function Home(){
   const prof = store.get('profile',null);
   const tt = todaysTopic();
+  const st = streakInfo();
   app.innerHTML = `
   <div class="hero fade">
-    <span class="badge">AI English Coach · B1+ → B2 → C1</span>
+    <span class="badge">🔥 ${st.cur}-day streak${st.best>st.cur?` · best ${st.best}`:''}</span>
     <h1>Take your English<br>to a confident level</h1>
     <p>The AI tests you, finds your weak spots and gives you personal theory and exercises for exactly those. No fluff.</p>
     <div class="row" style="justify-content:center">
@@ -589,6 +619,61 @@ function chatBubble(m){
     ${me?'':'<button class="btn ghost sm" style="margin-top:8px" onclick="speak(this.parentElement.innerText)">🔊</button>'}</div>`;
 }
 
+/* ---------- Listening (аудирование) ---------- */
+let _lastListen=null;
+async function Listening(){
+  app.innerHTML=`
+  <div class="card fade">
+    <h2 style="margin-bottom:6px">Listening practice</h2>
+    <p class="muted" style="margin-bottom:14px">The AI writes a short passage and reads it aloud. Listen (text hidden), then answer the questions. You can replay or reveal the script.</p>
+    <div class="row">
+      <input id="lTopic" placeholder="Topic (optional), e.g. space travel…" style="flex:1;min-width:220px;padding:12px 15px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:14px">
+      <button class="btn" id="lGen">New task ▶</button>
+    </div>
+    <div id="lOut" style="margin-top:18px"></div>
+  </div>`;
+  document.getElementById('lGen').onclick=genListening;
+  if(_lastListen)renderListening(_lastListen);
+}
+async function genListening(){
+  const out=document.getElementById('lOut');
+  if(!AI.hasRealKey()){out.innerHTML='<div class="explain">Listening works only with the AI connected.</div>';return;}
+  out.innerHTML=loader('The AI is writing your listening passage…');
+  try{
+    const topic=document.getElementById('lTopic').value.trim();
+    _lastListen=await AI.listening(AI.level(),topic);
+    renderListening(_lastListen);
+  }catch(e){out.innerHTML='<div class="explain"><b>Error:</b> '+esc(e.message)+'</div>';}
+}
+function renderListening(d){
+  const out=document.getElementById('lOut');
+  const qs=(d.questions||[]).map((q,i)=>`
+    <div class="card" style="margin:0 0 12px" data-q="${i}">
+      <div class="qtext" style="font-size:16px">${i+1}. ${esc(q.q)}</div>
+      <div class="opts">${(q.options||[]).map((o,j)=>`<div class="opt" data-i="${j}">${esc(o)}</div>`).join('')}</div>
+      <div data-res></div></div>`).join('');
+  out.innerHTML=`
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn" id="lPlay">🔊 Play</button>
+      <button class="btn ghost sm" id="lStop">⏹ Stop</button>
+      <button class="btn ghost sm" id="lShow">Show script</button>
+    </div>
+    <div id="lScript" class="explain" style="display:none;line-height:1.7"><b>${esc(d.title||'')}</b><br>${esc(d.text||'')}</div>
+    <h3 style="margin:16px 0 10px">Questions</h3>${qs}`;
+  document.getElementById('lPlay').onclick=()=>speak((d.title?d.title+'. ':'')+d.text);
+  document.getElementById('lStop').onclick=()=>speechSynthesis.cancel();
+  document.getElementById('lShow').onclick=e=>{const s=document.getElementById('lScript');const v=s.style.display==='none';s.style.display=v?'block':'none';e.target.textContent=v?'Hide script':'Show script';};
+  out.querySelectorAll('[data-q]').forEach(card=>{
+    const q=d.questions[+card.dataset.q];
+    card.querySelectorAll('.opt').forEach(el=>el.onclick=()=>{
+      const i=+el.dataset.i,ok=i===q.answer;
+      card.querySelectorAll('.opt').forEach((o,idx)=>{o.style.pointerEvents='none';
+        if(idx===q.answer)o.classList.add('correct');else if(idx===i)o.classList.add('wrong');else o.classList.add('dim');});
+      card.querySelector('[data-res]').innerHTML=`<div class="explain"><b>${ok?'Correct ✓':'Explanation:'}</b> ${esc(q.explain||'')}</div>`;
+    });
+  });
+}
+
 /* ---------- Теория (справочник) ---------- */
 const THEORY_TOPICS=["Tenses","Conditionals","Articles","Modal verbs","Reported speech","Passive voice","Prepositions","Phrasal verbs","Use of English","Grammar","Vocabulary","Gerunds & Infinitives","Relative clauses","Comparatives & Superlatives","Word order & Inversion","Future forms"];
 function Theory(){
@@ -697,4 +782,5 @@ document.getElementById('syncOff').onclick=()=>{localStorage.removeItem('syncCod
     requestAnimationFrame(loop);})();
 })();
 
+updateStreak();
 router();
